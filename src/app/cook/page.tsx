@@ -1,14 +1,14 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '@/components/layout/AuthProvider';
 import { usePantryStore } from '@/store/pantry';
 import { ChatMessage, Recipe, getExpiryStatus } from '@/types';
 import { generateId } from '@/lib/utils/formatting';
 import {
   Send, ChefHat, Clock, Users, Lightbulb, AlertTriangle,
-  Bookmark, Sparkles,
+  Bookmark, BookmarkCheck, Sparkles, Trash2, X,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -21,12 +21,46 @@ const SUGGESTED_PROMPTS = [
   '🥘 Use up everything expiring this week',
 ];
 
+interface SavedRecipe extends Recipe {
+  id: string;
+  generated_at: string;
+  instructions?: string;
+}
+
 export default function CookPage() {
   const { user } = useAuth();
-  const { items, chatHistory, addChatMessage } = usePantryStore();
+  const { items, setItems, chatHistory, addChatMessage } = usePantryStore();
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const [savedRecipes, setSavedRecipes] = useState<SavedRecipe[]>([]);
+  const [savingRecipeId, setSavingRecipeId] = useState<string | null>(null);
+  const [showSaved, setShowSaved] = useState(false);
+  const [savedMsgIds, setSavedMsgIds] = useState<Set<string>>(new Set());
+
+  // Fetch pantry items if store is empty (e.g. direct navigation / page refresh)
+  useEffect(() => {
+    if (items.length === 0 && user) {
+      fetch('/api/items')
+        .then((r) => r.json())
+        .then((data) => {
+          if (Array.isArray(data)) setItems(data);
+        })
+        .catch(console.error);
+    }
+  }, [user, items.length, setItems]);
+
+  // Fetch saved recipes
+  useEffect(() => {
+    if (user) {
+      fetch('/api/recipes')
+        .then((r) => r.json())
+        .then((data) => {
+          if (Array.isArray(data)) setSavedRecipes(data);
+        })
+        .catch(console.error);
+    }
+  }, [user]);
 
   const pantryNames = items.map((i) => i.name);
   const expiringNames = items
@@ -39,6 +73,34 @@ export default function CookPage() {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatHistory]);
+
+  const handleSaveRecipe = async (recipe: Recipe, msgId: string) => {
+    setSavingRecipeId(msgId);
+    try {
+      const res = await fetch('/api/recipes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(recipe),
+      });
+      if (res.ok) {
+        const saved = await res.json();
+        setSavedRecipes((prev) => [saved, ...prev]);
+        setSavedMsgIds((prev) => new Set(prev).add(msgId));
+      }
+    } catch (e) {
+      console.error('Failed to save recipe:', e);
+    }
+    setSavingRecipeId(null);
+  };
+
+  const handleDeleteRecipe = async (id: string) => {
+    try {
+      await fetch(`/api/recipes/${id}`, { method: 'DELETE' });
+      setSavedRecipes((prev) => prev.filter((r) => r.id !== id));
+    } catch (e) {
+      console.error('Failed to delete recipe:', e);
+    }
+  };
 
   const handleSend = async (message?: string) => {
     const text = message || input;
@@ -111,6 +173,7 @@ export default function CookPage() {
         // Not a JSON recipe — that's fine, display as text
       }
     } catch (error) {
+      console.error(error);
       const errorMsg: ChatMessage = {
         id: generateId(),
         role: 'assistant',
@@ -123,94 +186,199 @@ export default function CookPage() {
     setIsStreaming(false);
   };
 
+  const RecipeCard = ({ recipe, msgId }: { recipe: Recipe; msgId?: string }) => {
+    const isSaved = msgId ? savedMsgIds.has(msgId) : false;
 
-
-  const RecipeCard = ({ recipe }: { recipe: Recipe }) => (
-    <motion.div
-      initial={{ opacity: 0, x: 20 }}
-      animate={{ opacity: 1, x: 0 }}
-      className="glass-card-solid p-5 mt-3"
-    >
-      <div className="flex items-start justify-between mb-3">
-        <h3
-          className="text-lg font-semibold"
-          style={{ fontFamily: 'var(--font-display)' }}
-        >
-          {recipe.title}
-        </h3>
-        <div className="flex gap-1">
-          <button className="p-1.5 rounded hover:bg-[var(--canvas-deep)] text-[var(--pp-accent-gold)]">
-            <Bookmark className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-
-      {recipe.description && (
-        <p className="text-sm text-[var(--ink-muted)] italic mb-3">{recipe.description}</p>
-      )}
-
-      <div className="flex gap-4 mb-4 text-xs text-[var(--ink-faint)]">
-        {recipe.cookTime && (
-          <span className="flex items-center gap-1">
-            <Clock className="w-3.5 h-3.5" /> {recipe.cookTime} min
-          </span>
-        )}
-        {recipe.servings && (
-          <span className="flex items-center gap-1">
-            <Users className="w-3.5 h-3.5" /> {recipe.servings} servings
-          </span>
-        )}
-      </div>
-
-      {recipe.expiringUsed && recipe.expiringUsed.length > 0 && (
-        <div className="mb-3">
-          <p className="text-xs text-[var(--pp-accent-warm)] font-medium mb-1 flex items-center gap-1">
-            <AlertTriangle className="w-3 h-3" /> Using expiring items:
-          </p>
-          <div className="flex flex-wrap gap-1">
-            {recipe.expiringUsed.map((item, i) => (
-              <Badge key={i} className="expiry-warning text-xs">{item}</Badge>
-            ))}
+    return (
+      <motion.div
+        initial={{ opacity: 0, x: 20 }}
+        animate={{ opacity: 1, x: 0 }}
+        className="glass-card-solid p-5 mt-3"
+      >
+        <div className="flex items-start justify-between mb-3">
+          <h3
+            className="text-lg font-semibold"
+            style={{ fontFamily: 'var(--font-display)' }}
+          >
+            {recipe.title}
+          </h3>
+          <div className="flex gap-1">
+            {msgId && (
+              <button
+                onClick={() => !isSaved && handleSaveRecipe(recipe, msgId)}
+                disabled={savingRecipeId === msgId || isSaved}
+                className={`p-1.5 rounded hover:bg-[var(--canvas-deep)] transition-colors ${
+                  isSaved ? 'text-[var(--pp-accent-safe)]' : 'text-[var(--pp-accent-gold)]'
+                }`}
+                title={isSaved ? 'Saved!' : 'Save recipe'}
+              >
+                {isSaved ? (
+                  <BookmarkCheck className="w-4 h-4" />
+                ) : savingRecipeId === msgId ? (
+                  <Sparkles className="w-4 h-4 animate-pulse" />
+                ) : (
+                  <Bookmark className="w-4 h-4" />
+                )}
+              </button>
+            )}
           </div>
         </div>
-      )}
 
-      {recipe.ingredients && (
-        <div className="mb-3">
-          <p className="text-xs font-medium text-[var(--ink-muted)] uppercase tracking-wider mb-2">Ingredients</p>
-          <ul className="space-y-1">
-            {recipe.ingredients.map((ing, i) => (
-              <li key={i} className="text-sm flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-[var(--pp-accent-safe)]" />
-                {ing.amount} {ing.item}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+        {recipe.description && (
+          <p className="text-sm text-[var(--ink-muted)] italic mb-3">{recipe.description}</p>
+        )}
 
-      {recipe.steps && (
-        <div className="mb-3">
-          <p className="text-xs font-medium text-[var(--ink-muted)] uppercase tracking-wider mb-2">Steps</p>
-          <ol className="space-y-2">
-            {recipe.steps.map((step, i) => (
-              <li key={i} className="text-sm flex gap-3">
-                <span className="font-semibold text-[var(--pp-accent-navy)] shrink-0">{i + 1}.</span>
-                {step}
-              </li>
-            ))}
-          </ol>
+        <div className="flex gap-4 mb-4 text-xs text-[var(--ink-faint)]">
+          {recipe.cookTime && (
+            <span className="flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5" /> {recipe.cookTime} min
+            </span>
+          )}
+          {recipe.servings && (
+            <span className="flex items-center gap-1">
+              <Users className="w-3.5 h-3.5" /> {recipe.servings} servings
+            </span>
+          )}
         </div>
-      )}
 
-      {recipe.tip && (
-        <div className="flex items-start gap-2 p-3 rounded-lg bg-[var(--canvas-deep)] mt-3">
-          <Lightbulb className="w-4 h-4 text-[var(--pp-accent-gold)] shrink-0 mt-0.5" />
-          <p className="text-xs text-[var(--ink-muted)]">{recipe.tip}</p>
+        {recipe.expiringUsed && recipe.expiringUsed.length > 0 && (
+          <div className="mb-3">
+            <p className="text-xs text-[var(--pp-accent-warm)] font-medium mb-1 flex items-center gap-1">
+              <AlertTriangle className="w-3 h-3" /> Using expiring items:
+            </p>
+            <div className="flex flex-wrap gap-1">
+              {recipe.expiringUsed.map((item, i) => (
+                <Badge key={i} className="expiry-warning text-xs">{item}</Badge>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {recipe.ingredients && (
+          <div className="mb-3">
+            <p className="text-xs font-medium text-[var(--ink-muted)] uppercase tracking-wider mb-2">Ingredients</p>
+            <ul className="space-y-1">
+              {recipe.ingredients.map((ing, i) => (
+                <li key={i} className="text-sm flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--pp-accent-safe)]" />
+                  {ing.amount} {ing.item}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {recipe.steps && (
+          <div className="mb-3">
+            <p className="text-xs font-medium text-[var(--ink-muted)] uppercase tracking-wider mb-2">Steps</p>
+            <ol className="space-y-2">
+              {recipe.steps.map((step, i) => (
+                <li key={i} className="text-sm flex gap-3">
+                  <span className="font-semibold text-[var(--pp-accent-navy)] shrink-0">{i + 1}.</span>
+                  {step}
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
+
+        {recipe.tip && (
+          <div className="flex items-start gap-2 p-3 rounded-lg bg-[var(--canvas-deep)] mt-3">
+            <Lightbulb className="w-4 h-4 text-[var(--pp-accent-gold)] shrink-0 mt-0.5" />
+            <p className="text-xs text-[var(--ink-muted)]">{recipe.tip}</p>
+          </div>
+        )}
+      </motion.div>
+    );
+  };
+
+  const SavedRecipeCard = ({ recipe }: { recipe: SavedRecipe }) => {
+    const recipeForCard: Recipe = {
+      ...recipe,
+      cookTime: recipe.cook_time_minutes || recipe.cookTime,
+      steps: recipe.instructions ? recipe.instructions.split('\n').filter(Boolean) : recipe.steps,
+      expiringUsed: recipe.tags || [],
+    };
+
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -10 }}
+        className="glass-card-solid p-5 relative"
+      >
+        <button
+          onClick={() => handleDeleteRecipe(recipe.id)}
+          className="absolute top-3 right-3 p-1.5 rounded hover:bg-[var(--canvas-deep)] text-[var(--ink-faint)] hover:text-[var(--pp-accent-warm)] transition-colors"
+          title="Remove from saved"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+
+        <h3
+          className="text-lg font-semibold mb-1 pr-8"
+          style={{ fontFamily: 'var(--font-display)' }}
+        >
+          {recipeForCard.title}
+        </h3>
+
+        {recipeForCard.description && (
+          <p className="text-sm text-[var(--ink-muted)] italic mb-3">{recipeForCard.description}</p>
+        )}
+
+        <div className="flex gap-4 mb-4 text-xs text-[var(--ink-faint)]">
+          {recipeForCard.cookTime && (
+            <span className="flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5" /> {recipeForCard.cookTime} min
+            </span>
+          )}
+          {recipeForCard.servings && (
+            <span className="flex items-center gap-1">
+              <Users className="w-3.5 h-3.5" /> {recipeForCard.servings} servings
+            </span>
+          )}
+          <span className="text-[var(--ink-faint)]">
+            Saved {new Date(recipe.generated_at).toLocaleDateString()}
+          </span>
         </div>
-      )}
-    </motion.div>
-  );
+
+        {recipeForCard.ingredients && (
+          <div className="mb-3">
+            <p className="text-xs font-medium text-[var(--ink-muted)] uppercase tracking-wider mb-2">Ingredients</p>
+            <ul className="space-y-1">
+              {recipeForCard.ingredients.map((ing, i) => (
+                <li key={i} className="text-sm flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--pp-accent-safe)]" />
+                  {ing.amount} {ing.item}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {recipeForCard.steps && (
+          <div className="mb-3">
+            <p className="text-xs font-medium text-[var(--ink-muted)] uppercase tracking-wider mb-2">Steps</p>
+            <ol className="space-y-2">
+              {recipeForCard.steps.map((step, i) => (
+                <li key={i} className="text-sm flex gap-3">
+                  <span className="font-semibold text-[var(--pp-accent-navy)] shrink-0">{i + 1}.</span>
+                  {step}
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
+
+        {recipeForCard.tip && (
+          <div className="flex items-start gap-2 p-3 rounded-lg bg-[var(--canvas-deep)] mt-3">
+            <Lightbulb className="w-4 h-4 text-[var(--pp-accent-gold)] shrink-0 mt-0.5" />
+            <p className="text-xs text-[var(--ink-muted)]">{recipeForCard.tip}</p>
+          </div>
+        )}
+      </motion.div>
+    );
+  };
 
   return (
     <div className="min-h-screen pt-20 pb-4 flex flex-col max-w-5xl mx-auto px-4">
@@ -218,18 +386,74 @@ export default function CookPage() {
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="mb-4"
+        className="mb-4 flex items-end justify-between"
       >
-        <h1
-          className="text-3xl font-bold"
-          style={{ fontFamily: 'var(--font-display)' }}
+        <div>
+          <h1
+            className="text-3xl font-bold"
+            style={{ fontFamily: 'var(--font-display)' }}
+          >
+            What Can I Cook?
+          </h1>
+          <p className="text-[var(--ink-muted)] text-sm">
+            AI recipes using only your pantry items • {pantryNames.length} ingredients available
+          </p>
+        </div>
+
+        <Button
+          variant="outline"
+          onClick={() => setShowSaved(!showSaved)}
+          className={`border-[var(--pp-border)] gap-1.5 ${
+            showSaved ? 'bg-[var(--pp-accent-navy)] text-white' : ''
+          }`}
         >
-          What Can I Cook?
-        </h1>
-        <p className="text-[var(--ink-muted)] text-sm">
-          AI recipes using only your pantry items • {pantryNames.length} ingredients available
-        </p>
+          <BookmarkCheck className="w-4 h-4" />
+          Saved ({savedRecipes.length})
+        </Button>
       </motion.div>
+
+      {/* Saved Recipes Panel */}
+      <AnimatePresence>
+        {showSaved && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden mb-4"
+          >
+            <div className="glass-card p-4">
+              <div className="flex items-center justify-between mb-4">
+                <h2
+                  className="text-lg font-semibold"
+                  style={{ fontFamily: 'var(--font-display)' }}
+                >
+                  Saved Recipes
+                </h2>
+                <button
+                  onClick={() => setShowSaved(false)}
+                  className="p-1.5 rounded hover:bg-[var(--canvas-deep)]"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {savedRecipes.length === 0 ? (
+                <p className="text-sm text-[var(--ink-faint)] text-center py-6">
+                  No saved recipes yet. Click the <Bookmark className="w-3.5 h-3.5 inline" /> icon on any recipe to save it!
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[60vh] overflow-y-auto pr-1">
+                  <AnimatePresence>
+                    {savedRecipes.map((recipe) => (
+                      <SavedRecipeCard key={recipe.id} recipe={recipe} />
+                    ))}
+                  </AnimatePresence>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="flex flex-col lg:flex-row gap-6 flex-1 min-h-0">
         {/* Left: Ingredient chips */}
@@ -319,7 +543,7 @@ export default function CookPage() {
                       ) : null}
                     </div>
                   </div>
-                  {msg.recipe && <RecipeCard recipe={msg.recipe} />}
+                  {msg.recipe && <RecipeCard recipe={msg.recipe} msgId={msg.id} />}
                 </div>
               ))
             )}

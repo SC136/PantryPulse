@@ -21,7 +21,7 @@ export async function generateRecipe(
     : '';
 
   const stream = await client.chat.completions.create({
-    model: 'deepseek-ai/deepseek-v3.2',
+    model: 'meta/llama-4-maverick-17b-128e-instruct',
     messages: [
       {
         role: 'system',
@@ -75,7 +75,7 @@ export async function generateRecipe(
 
 export async function estimateExpiry(itemName: string): Promise<number> {
   const completion = await client.chat.completions.create({
-    model: 'deepseek-ai/deepseek-v3.2',
+    model: 'meta/llama-4-maverick-17b-128e-instruct',
     messages: [
       {
         role: 'system',

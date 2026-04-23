@@ -108,22 +108,22 @@ ALTER TABLE grocery_list ENABLE ROW LEVEL SECURITY;
 ALTER TABLE waste_log ENABLE ROW LEVEL SECURITY;
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 
--- RLS policies
+-- RLS policies (USING = read/update/delete, WITH CHECK = insert/update)
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users own pantry items') THEN
-    CREATE POLICY "Users own pantry items" ON pantry_items FOR ALL USING (auth.uid() = user_id);
+    CREATE POLICY "Users own pantry items" ON pantry_items FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users own recipes') THEN
-    CREATE POLICY "Users own recipes" ON recipes FOR ALL USING (auth.uid() = user_id);
+    CREATE POLICY "Users own recipes" ON recipes FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users own grocery list') THEN
-    CREATE POLICY "Users own grocery list" ON grocery_list FOR ALL USING (auth.uid() = user_id);
+    CREATE POLICY "Users own grocery list" ON grocery_list FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users own waste log') THEN
-    CREATE POLICY "Users own waste log" ON waste_log FOR ALL USING (auth.uid() = user_id);
+    CREATE POLICY "Users own waste log" ON waste_log FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users own profile') THEN
-    CREATE POLICY "Users own profile" ON profiles FOR ALL USING (auth.uid() = id);
+    CREATE POLICY "Users own profile" ON profiles FOR ALL USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
   END IF;
 END $$;
 

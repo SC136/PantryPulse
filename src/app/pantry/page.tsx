@@ -317,7 +317,7 @@ export default function PantryPage() {
             </DialogContent>
           </Dialog>
 
-          <Dialog open={scanOpen} onOpenChange={setScanOpen}>
+          <Dialog open={scanOpen} onOpenChange={(open) => { setScanOpen(open); if (!open) setScannedItems([]); }}>
             <DialogTrigger render={
               <Button variant="outline" className="border-[var(--pp-border)]">
                 <Camera className="w-4 h-4 mr-1" /> Scan Fridge
@@ -339,19 +339,21 @@ export default function PantryPage() {
               ) : (
                 <div className="space-y-3">
                   <p className="text-sm text-[var(--ink-muted)]">Found {scannedItems.length} items. Deselect any you don&apos;t want to add:</p>
-                  {scannedItems.map((item, i) => (
-                    <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-[var(--canvas-deep)]">
-                      <input type="checkbox" checked={item.selected} onChange={() => {
-                        const updated = [...scannedItems];
-                        updated[i].selected = !updated[i].selected;
-                        setScannedItems(updated);
-                      }} className="rounded" />
-                      <div className="flex-1">
-                        <p className="text-sm font-medium">{item.name}</p>
-                        <p className="text-xs text-[var(--ink-faint)]">{item.quantity} {item.unit} • ~{item.estimatedDaysLeft}d left</p>
+                  <div className="max-h-[50vh] overflow-y-auto space-y-2 pr-1">
+                    {scannedItems.map((item, i) => (
+                      <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-[var(--canvas-deep)]">
+                        <input type="checkbox" checked={item.selected} onChange={() => {
+                          const updated = [...scannedItems];
+                          updated[i].selected = !updated[i].selected;
+                          setScannedItems(updated);
+                        }} className="rounded" />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium">{item.name}</p>
+                          <p className="text-xs text-[var(--ink-faint)]">{item.quantity} {item.unit} • ~{item.estimatedDaysLeft}d left</p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                   <Button onClick={handleConfirmScan} disabled={isSubmitting} className="w-full bg-[var(--pp-accent-navy)]">
                     Add {scannedItems.filter((i) => i.selected).length} Items
                   </Button>
@@ -360,7 +362,7 @@ export default function PantryPage() {
             </DialogContent>
           </Dialog>
 
-          <Dialog open={receiptOpen} onOpenChange={setReceiptOpen}>
+          <Dialog open={receiptOpen} onOpenChange={(open) => { setReceiptOpen(open); if (!open) setReceiptItems([]); }}>
             <DialogTrigger render={
               <Button variant="outline" className="border-[var(--pp-border)]">
                 <Receipt className="w-4 h-4 mr-1" /> Scan Receipt
