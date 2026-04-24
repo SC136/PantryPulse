@@ -30,6 +30,9 @@ const categoryColors = {
   pantry: 'var(--pp-accent-gold)',
 };
 
+const FRIDGE_SCAN_POLL_INTERVAL_MS = 1500;
+const FRIDGE_SCAN_MAX_POLLS = 40;
+
 export default function PantryPage() {
   const { user } = useAuth();
   const { items, setItems, activeCategory, setActiveCategory, removeItem, updateItem } = usePantryStore();
@@ -138,8 +141,47 @@ export default function PantryPage() {
 
     try {
       const res = await fetch('/api/scan-fridge', { method: 'POST', body: formData });
-      const { items: detected } = await res.json();
-      setScannedItems((detected || []).map((item: Record<string, unknown>) => ({ ...item, selected: true })));
+      if (!res.ok) {
+        throw new Error('Failed to start fridge scan');
+      }
+
+      const { jobId } = await res.json() as { jobId?: string };
+      if (!jobId) {
+        throw new Error('Scan job id missing');
+      }
+
+      let detected: Array<Record<string, unknown>> = [];
+      let isCompleted = false;
+      for (let attempt = 0; attempt < FRIDGE_SCAN_MAX_POLLS; attempt += 1) {
+        const pollRes = await fetch(`/api/scan-fridge/${jobId}`, { cache: 'no-store' });
+        if (!pollRes.ok) {
+          throw new Error('Failed to fetch scan status');
+        }
+
+        const pollData = await pollRes.json() as {
+          status: string;
+          items?: Array<Record<string, unknown>>;
+          error?: string;
+        };
+
+        if (pollData.status === 'completed') {
+          detected = pollData.items || [];
+          isCompleted = true;
+          break;
+        }
+
+        if (pollData.status === 'failed') {
+          throw new Error(pollData.error || 'Fridge scan failed');
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, FRIDGE_SCAN_POLL_INTERVAL_MS));
+      }
+
+      if (!isCompleted) {
+        throw new Error('Scan timed out before completion');
+      }
+
+      setScannedItems(detected.map((item) => ({ ...item, selected: true })));
     } catch (e) { console.error(e); }
     setScanLoading(false);
   };

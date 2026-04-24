@@ -1,5 +1,7 @@
 import axios from 'axios';
 
+const GEMMA_TIMEOUT_MS = 15_000;
+
 export interface DetectedItem {
   name: string;
   quantity: number;
@@ -34,17 +36,24 @@ Be thorough — identify everything visible. If you cannot determine days left, 
     top_p: 0.7,
   };
 
+  let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
+    const controller = new AbortController();
+    timeout = setTimeout(() => controller.abort(), GEMMA_TIMEOUT_MS);
+
     const response = await axios.post(
       'https://integrate.api.nvidia.com/v1/chat/completions',
       payload,
       {
+        timeout: GEMMA_TIMEOUT_MS,
+        signal: controller.signal,
         headers: {
           Authorization: `Bearer ${process.env.NVIDIA_API_KEY}`,
           'Content-Type': 'application/json',
         },
       }
     );
+    clearTimeout(timeout);
 
     const content = response.data.choices?.[0]?.message?.content || '';
     const jsonMatch = content.match(/\[[\s\S]*\]/);
@@ -55,5 +64,7 @@ Be thorough — identify everything visible. If you cannot determine days left, 
   } catch (error) {
     console.error('Gemma vision error:', error);
     return [];
+  } finally {
+    if (timeout) clearTimeout(timeout);
   }
 }

@@ -73,6 +73,19 @@ CREATE TABLE IF NOT EXISTS waste_log (
   reason VARCHAR(100) DEFAULT 'expired'
 );
 
+-- Fridge scan jobs (async AI processing)
+CREATE TABLE IF NOT EXISTS fridge_scan_jobs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  scan_path TEXT NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'processing', 'completed', 'failed')),
+  detected_items JSONB DEFAULT '[]'::jsonb,
+  error TEXT,
+  completed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- User profiles (extends auth.users)
 CREATE TABLE IF NOT EXISTS profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -106,6 +119,7 @@ ALTER TABLE pantry_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE recipes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE grocery_list ENABLE ROW LEVEL SECURITY;
 ALTER TABLE waste_log ENABLE ROW LEVEL SECURITY;
+ALTER TABLE fridge_scan_jobs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 
 -- RLS policies (USING = read/update/delete, WITH CHECK = insert/update)
@@ -122,6 +136,9 @@ DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users own waste log') THEN
     CREATE POLICY "Users own waste log" ON waste_log FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users own fridge scan jobs') THEN
+    CREATE POLICY "Users own fridge scan jobs" ON fridge_scan_jobs FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+  END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Users own profile') THEN
     CREATE POLICY "Users own profile" ON profiles FOR ALL USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
   END IF;
@@ -134,3 +151,5 @@ CREATE INDEX IF NOT EXISTS idx_pantry_category ON pantry_items(user_id, category
 CREATE INDEX IF NOT EXISTS idx_recipes_user_id ON recipes(user_id);
 CREATE INDEX IF NOT EXISTS idx_grocery_user_id ON grocery_list(user_id);
 CREATE INDEX IF NOT EXISTS idx_waste_user_id ON waste_log(user_id);
+CREATE INDEX IF NOT EXISTS idx_fridge_scan_jobs_user_id ON fridge_scan_jobs(user_id);
+CREATE INDEX IF NOT EXISTS idx_fridge_scan_jobs_status ON fridge_scan_jobs(status);

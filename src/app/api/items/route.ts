@@ -9,13 +9,18 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const category = searchParams.get('category');
   const expiring = searchParams.get('expiring');
+  const rawLimit = Number.parseInt(searchParams.get('limit') ?? '', 10);
+  const rawOffset = Number.parseInt(searchParams.get('offset') ?? '', 10);
+  const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 100) : 50;
+  const offset = Number.isFinite(rawOffset) ? Math.max(rawOffset, 0) : 0;
 
   let query = supabase
     .from('pantry_items')
-    .select('*')
+    .select('id,name,category,quantity,unit,expiry_date,days_until_expiry,price,is_used')
     .eq('user_id', user.id)
     .eq('is_used', false)
-    .order('expiry_date', { ascending: true, nullsFirst: false });
+    .order('expiry_date', { ascending: true, nullsFirst: false })
+    .range(offset, offset + limit - 1);
 
   if (category && category !== 'all') {
     query = query.eq('category', category);
