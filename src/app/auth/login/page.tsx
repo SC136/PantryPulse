@@ -45,7 +45,8 @@ export default function LoginPage() {
       options: { data: { full_name: fullName } },
     });
     if (!error) {
-      setMessage('Check your email to confirm your account!');
+      router.push('/profile');
+      router.refresh();
     } else {
       setError(error.message);
     }
