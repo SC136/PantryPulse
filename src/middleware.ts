@@ -32,12 +32,13 @@ export async function middleware(request: NextRequest) {
 
   // Protect all routes except auth pages and public assets
   const isAuthPage = request.nextUrl.pathname.startsWith('/auth');
+  const isJoinPage = request.nextUrl.pathname.startsWith('/join');
   const isApiSetup = request.nextUrl.pathname.startsWith('/api/setup-storage');
   const isPublicAsset =
     request.nextUrl.pathname.startsWith('/_next') ||
     request.nextUrl.pathname.includes('.');
 
-  if (!user && !isAuthPage && !isPublicAsset && !isApiSetup) {
+  if (!user && !isAuthPage && !isJoinPage && !isPublicAsset && !isApiSetup) {
     const url = request.nextUrl.clone();
     url.pathname = '/auth/login';
     return NextResponse.redirect(url);

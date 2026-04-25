@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
 import { useAuth } from './AuthProvider';
+import { HouseholdSwitcher } from './HouseholdSwitcher';
 import { createClient } from '@/lib/supabase/client';
 
 const navLinks = [
@@ -95,6 +96,9 @@ export function Navbar() {
 
             {/* Right side */}
             <div className="flex items-center gap-2">
+              <div className="hidden md:block">
+                <HouseholdSwitcher />
+              </div>
               <ThemeToggle />
               <button
                 onClick={handleLogout}

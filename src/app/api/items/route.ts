@@ -16,11 +16,16 @@ export async function GET(req: NextRequest) {
 
   let query = supabase
     .from('pantry_items')
-    .select('id,name,category,quantity,unit,expiry_date,days_until_expiry,price,is_used')
+    .select('id,name,category,quantity,unit,expiry_date,days_until_expiry,price,is_used,household_id')
     .eq('user_id', user.id)
     .eq('is_used', false)
     .order('expiry_date', { ascending: true, nullsFirst: false })
     .range(offset, offset + limit - 1);
+
+  const householdId = searchParams.get('household_id');
+  if (householdId) {
+    query = query.eq('household_id', householdId);
+  }
 
   if (category && category !== 'all') {
     query = query.eq('category', category);

@@ -1,0 +1,174 @@
+-- ============================================================
+-- Households feature migration (additive, non-breaking)
+-- Run this in Supabase SQL Editor AFTER deploying the code.
+-- ============================================================
+
+-- 1. New tables
+-- -----------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS households (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  created_by UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS household_members (
+  household_id UUID NOT NULL REFERENCES households(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  role TEXT NOT NULL CHECK (role IN ('owner', 'member')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (household_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS household_invites (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  household_id UUID NOT NULL REFERENCES households(id) ON DELETE CASCADE,
+  invited_email TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'member',
+  token TEXT UNIQUE NOT NULL,
+  created_by UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  accepted_at TIMESTAMPTZ
+);
+
+-- 2. Alter pantry_items — add nullable household_id
+-- -----------------------------------------------------------
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'pantry_items' AND column_name = 'household_id'
+  ) THEN
+    ALTER TABLE pantry_items ADD COLUMN household_id UUID REFERENCES households(id);
+  END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_pantry_household ON pantry_items(household_id);
+CREATE INDEX IF NOT EXISTS idx_household_members_user ON household_members(user_id);
+
+-- 3. RLS on new tables
+-- -----------------------------------------------------------
+
+ALTER TABLE households ENABLE ROW LEVEL SECURITY;
+ALTER TABLE household_members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE household_invites ENABLE ROW LEVEL SECURITY;
+
+-- households: select only if user is a member
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Members can view household') THEN
+    CREATE POLICY "Members can view household" ON households
+      FOR SELECT USING (
+        EXISTS (
+          SELECT 1 FROM household_members
+          WHERE household_members.household_id = households.id
+            AND household_members.user_id = auth.uid()
+        )
+      );
+  END IF;
+END $$;
+
+-- households: anyone authenticated can insert (they become owner via API)
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Auth users can create household') THEN
+    CREATE POLICY "Auth users can create household" ON households
+      FOR INSERT WITH CHECK (auth.uid() = created_by);
+  END IF;
+END $$;
+
+-- household_members: select if member of same household
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Members can view household members') THEN
+    CREATE POLICY "Members can view household members" ON household_members
+      FOR SELECT USING (
+        EXISTS (
+          SELECT 1 FROM household_members AS my
+          WHERE my.household_id = household_members.household_id
+            AND my.user_id = auth.uid()
+        )
+      );
+  END IF;
+END $$;
+
+-- household_members: insert if member of household (for accepting invites, the API does this)
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Members can add members') THEN
+    CREATE POLICY "Members can add members" ON household_members
+      FOR INSERT WITH CHECK (
+        auth.uid() = user_id
+        OR EXISTS (
+          SELECT 1 FROM household_members AS my
+          WHERE my.household_id = household_members.household_id
+            AND my.user_id = auth.uid()
+        )
+      );
+  END IF;
+END $$;
+
+-- household_invites: insert if member of household
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Members can create invites') THEN
+    CREATE POLICY "Members can create invites" ON household_invites
+      FOR INSERT WITH CHECK (
+        EXISTS (
+          SELECT 1 FROM household_members
+          WHERE household_members.household_id = household_invites.household_id
+            AND household_members.user_id = auth.uid()
+        )
+      );
+  END IF;
+END $$;
+
+-- household_invites: select by token (for accepting) or if member
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Invites readable by token or member') THEN
+    CREATE POLICY "Invites readable by token or member" ON household_invites
+      FOR SELECT USING (
+        EXISTS (
+          SELECT 1 FROM household_members
+          WHERE household_members.household_id = household_invites.household_id
+            AND household_members.user_id = auth.uid()
+        )
+      );
+  END IF;
+END $$;
+
+-- household_invites: update (set accepted_at) — anyone authenticated
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Auth users can accept invites') THEN
+    CREATE POLICY "Auth users can accept invites" ON household_invites
+      FOR UPDATE USING (true) WITH CHECK (true);
+  END IF;
+END $$;
+
+-- 4. Update pantry_items RLS
+-- -----------------------------------------------------------
+-- Replace the existing policy to also allow household members.
+-- The old policy name is "Users own pantry items".
+
+DROP POLICY IF EXISTS "Users own pantry items" ON pantry_items;
+
+CREATE POLICY "Users own or household pantry items" ON pantry_items
+  FOR ALL USING (
+    auth.uid() = user_id
+    OR (
+      household_id IS NOT NULL
+      AND EXISTS (
+        SELECT 1 FROM household_members
+        WHERE household_members.household_id = pantry_items.household_id
+          AND household_members.user_id = auth.uid()
+      )
+    )
+  )
+  WITH CHECK (
+    auth.uid() = user_id
+    OR (
+      household_id IS NOT NULL
+      AND EXISTS (
+        SELECT 1 FROM household_members
+        WHERE household_members.household_id = pantry_items.household_id
+          AND household_members.user_id = auth.uid()
+      )
+    )
+  );
