@@ -39,17 +39,23 @@ export async function POST() {
     return NextResponse.json({ status: 'already_bootstrapped', household_id: existing[0].household_id });
   }
 
+  console.log('[bootstrap] user.id:', user.id, 'user.email:', user.email);
+
   // Create default household
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: household, error: hErr } = await (supabase as any)
     .from('households')
-    .insert({ name: 'My Household', created_by: user.id })
+    .insert([{ name: 'My Household', created_by: user.id }])
     .select()
     .single();
 
   if (hErr) {
-    console.error('[bootstrap] households insert error:', hErr);
-    return NextResponse.json({ error: hErr.message, code: hErr.code }, { status: 500 });
+    console.error('[bootstrap] households insert error:', JSON.stringify(hErr, null, 2));
+    console.error('[bootstrap] hErr.message:', hErr.message);
+    console.error('[bootstrap] hErr.code:', hErr.code);
+    console.error('[bootstrap] hErr.details:', hErr.details);
+    console.error('[bootstrap] hErr.hint:', hErr.hint);
+    return NextResponse.json({ error: hErr.message || 'insert failed', code: hErr.code, details: hErr.details, hint: hErr.hint }, { status: 500 });
   }
 
   // Add owner membership
