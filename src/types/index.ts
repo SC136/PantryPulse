@@ -12,6 +12,7 @@ export interface PantryItem {
   store: string | null;
   image_url: string | null;
   is_used: boolean;
+  household_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -71,6 +72,31 @@ export interface WasteLogEntry {
   estimated_price: number | null;
   wasted_at: string;
   reason: string;
+}
+
+export interface Household {
+  id: string;
+  name: string;
+  created_by: string;
+  created_at: string;
+}
+
+export interface HouseholdMember {
+  household_id: string;
+  user_id: string;
+  role: 'owner' | 'member';
+  created_at: string;
+}
+
+export interface HouseholdInvite {
+  id: string;
+  household_id: string;
+  invited_email: string;
+  role: string;
+  token: string;
+  created_by: string;
+  created_at: string;
+  accepted_at: string | null;
 }
 
 export type ExpiryStatus = 'critical' | 'warning' | 'safe' | 'unknown';

@@ -28,6 +28,7 @@ export interface Database {
           store: string | null
           image_url: string | null
           is_used: boolean
+          household_id: string | null
           created_at: string
           updated_at: string
         }
@@ -44,6 +45,7 @@ export interface Database {
           store?: string | null
           image_url?: string | null
           is_used?: boolean
+          household_id?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -60,6 +62,7 @@ export interface Database {
           store?: string | null
           image_url?: string | null
           is_used?: boolean
+          household_id?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -194,6 +197,81 @@ export interface Database {
           has_air_fryer?: boolean
           has_instant_pot?: boolean
           created_at?: string
+        }
+        Relationships: []
+      }
+      households: {
+        Row: {
+          id: string
+          name: string
+          created_by: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          created_by: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          created_by?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
+      household_members: {
+        Row: {
+          household_id: string
+          user_id: string
+          role: string
+          created_at: string
+        }
+        Insert: {
+          household_id: string
+          user_id: string
+          role: string
+          created_at?: string
+        }
+        Update: {
+          household_id?: string
+          user_id?: string
+          role?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
+      household_invites: {
+        Row: {
+          id: string
+          household_id: string
+          invited_email: string
+          role: string
+          token: string
+          created_by: string
+          created_at: string
+          accepted_at: string | null
+        }
+        Insert: {
+          id?: string
+          household_id: string
+          invited_email: string
+          role?: string
+          token: string
+          created_by: string
+          created_at?: string
+          accepted_at?: string | null
+        }
+        Update: {
+          id?: string
+          household_id?: string
+          invited_email?: string
+          role?: string
+          token?: string
+          created_by?: string
+          created_at?: string
+          accepted_at?: string | null
         }
         Relationships: []
       }

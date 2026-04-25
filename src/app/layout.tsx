@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Cormorant_Garamond, Source_Serif_4 } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from '@/components/layout/AuthProvider';
+import { HouseholdProvider } from '@/components/layout/HouseholdProvider';
 import { Navbar } from '@/components/layout/Navbar';
 import { createClient } from '@/lib/supabase/server';
 
@@ -65,8 +66,10 @@ export default async function RootLayout({
       </head>
       <body className="min-h-full flex flex-col antialiased">
         <AuthProvider initialUser={initialUser}>
-          <Navbar />
-          <main className="flex-1">{children}</main>
+          <HouseholdProvider>
+            <Navbar />
+            <main className="flex-1">{children}</main>
+          </HouseholdProvider>
         </AuthProvider>
       </body>
     </html>

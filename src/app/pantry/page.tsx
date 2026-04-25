@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '@/components/layout/AuthProvider';
 import { usePantryStore } from '@/store/pantry';
+import { useHouseholdStore } from '@/store/household';
 import { PantryItem, getExpiryStatus } from '@/types';
 import { getExpiryLabel } from '@/lib/utils/expiry';
 import {
@@ -36,6 +37,7 @@ const FRIDGE_SCAN_MAX_POLLS = 40;
 export default function PantryPage() {
   const { user } = useAuth();
   const { items, setItems, activeCategory, setActiveCategory, removeItem, updateItem } = usePantryStore();
+  const { activeHouseholdId, isBootstrapped } = useHouseholdStore();
   const [search, setSearch] = useState('');
   const [addOpen, setAddOpen] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
@@ -57,11 +59,13 @@ export default function PantryPage() {
   const [receiptItems, setReceiptItems] = useState<Array<{ name: string; quantity: number; price: number | null; selected: boolean }>>([]);
 
   useEffect(() => {
-    if (!user) return;
-    fetch('/api/items')
+    if (!user || !isBootstrapped) return;
+    const params = new URLSearchParams();
+    if (activeHouseholdId) params.set('household_id', activeHouseholdId);
+    fetch(`/api/items?${params.toString()}`)
       .then((r) => r.json())
       .then((data) => { if (Array.isArray(data)) setItems(data); });
-  }, [user, setItems]);
+  }, [user, setItems, activeHouseholdId, isBootstrapped]);
 
   const filteredItems = items.filter((item) => {
     const matchesCategory = activeCategory === 'all' || item.category === activeCategory;
@@ -99,6 +103,7 @@ export default function PantryPage() {
           unit: newUnit,
           expiry_date: expiryDate || null,
           price: newPrice ? parseFloat(newPrice) : null,
+          household_id: activeHouseholdId || undefined,
         }),
       });
       const data = await res.json();
