@@ -15,11 +15,17 @@ export async function POST() {
 
   // Check if user already has any memberships
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: existing } = await (supabase as any)
+  const { data: existing, error: existErr } = await (supabase as any)
     .from('household_members')
     .select('household_id')
     .eq('user_id', user.id)
     .limit(1);
+
+  // Surface any DB errors (e.g. table missing, RLS)
+  if (existErr) {
+    console.error('[bootstrap] household_members query error:', existErr);
+    return NextResponse.json({ error: existErr.message, code: existErr.code }, { status: 500 });
+  }
 
   if (existing && existing.length > 0) {
     // Already bootstrapped — backfill any remaining null household_id items
@@ -41,13 +47,21 @@ export async function POST() {
     .select()
     .single();
 
-  if (hErr) return NextResponse.json({ error: hErr.message }, { status: 500 });
+  if (hErr) {
+    console.error('[bootstrap] households insert error:', hErr);
+    return NextResponse.json({ error: hErr.message, code: hErr.code }, { status: 500 });
+  }
 
   // Add owner membership
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (supabase as any)
+  const { error: mErr } = await (supabase as any)
     .from('household_members')
     .insert({ household_id: household.id, user_id: user.id, role: 'owner' });
+
+  if (mErr) {
+    console.error('[bootstrap] household_members insert error:', mErr);
+    return NextResponse.json({ error: mErr.message, code: mErr.code }, { status: 500 });
+  }
 
   // Backfill existing pantry items
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

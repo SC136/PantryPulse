@@ -1,5 +1,6 @@
 -- ============================================================
 -- Households feature migration (additive, non-breaking)
+-- v2: Fixed infinite recursion in RLS policies
 -- Run this in Supabase SQL Editor AFTER deploying the code.
 -- ============================================================
 
@@ -48,127 +49,93 @@ END $$;
 CREATE INDEX IF NOT EXISTS idx_pantry_household ON pantry_items(household_id);
 CREATE INDEX IF NOT EXISTS idx_household_members_user ON household_members(user_id);
 
--- 3. RLS on new tables
+-- 3. Helper function to break RLS recursion (SECURITY DEFINER bypasses RLS)
+-- -----------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION is_household_member(hid UUID)
+RETURNS BOOLEAN
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM household_members
+    WHERE household_id = hid
+      AND user_id = auth.uid()
+  );
+$$;
+
+-- 4. RLS on new tables
 -- -----------------------------------------------------------
 
 ALTER TABLE households ENABLE ROW LEVEL SECURITY;
 ALTER TABLE household_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE household_invites ENABLE ROW LEVEL SECURITY;
 
--- households: select only if user is a member
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Members can view household') THEN
-    CREATE POLICY "Members can view household" ON households
-      FOR SELECT USING (
-        EXISTS (
-          SELECT 1 FROM household_members
-          WHERE household_members.household_id = households.id
-            AND household_members.user_id = auth.uid()
-        )
-      );
-  END IF;
-END $$;
+-- Drop old (broken) policies if they exist
+DROP POLICY IF EXISTS "Members can view household" ON households;
+DROP POLICY IF EXISTS "Auth users can create household" ON households;
+DROP POLICY IF EXISTS "Members can view household members" ON household_members;
+DROP POLICY IF EXISTS "Members can add members" ON household_members;
+DROP POLICY IF EXISTS "Members can create invites" ON household_invites;
+DROP POLICY IF EXISTS "Invites readable by token or member" ON household_invites;
+DROP POLICY IF EXISTS "Auth users can accept invites" ON household_invites;
+DROP POLICY IF EXISTS "Users own pantry items" ON pantry_items;
+DROP POLICY IF EXISTS "Users own or household pantry items" ON pantry_items;
 
--- households: anyone authenticated can insert (they become owner via API)
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Auth users can create household') THEN
-    CREATE POLICY "Auth users can create household" ON households
-      FOR INSERT WITH CHECK (auth.uid() = created_by);
-  END IF;
-END $$;
+-- households: select only if user is a member (uses helper fn — no recursion)
+CREATE POLICY "Members can view household" ON households
+  FOR SELECT USING (is_household_member(id));
 
--- household_members: select if member of same household
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Members can view household members') THEN
-    CREATE POLICY "Members can view household members" ON household_members
-      FOR SELECT USING (
-        EXISTS (
-          SELECT 1 FROM household_members AS my
-          WHERE my.household_id = household_members.household_id
-            AND my.user_id = auth.uid()
-        )
-      );
-  END IF;
-END $$;
+-- households: creator can insert
+CREATE POLICY "Auth users can create household" ON households
+  FOR INSERT WITH CHECK (auth.uid() = created_by);
 
--- household_members: insert if member of household (for accepting invites, the API does this)
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Members can add members') THEN
-    CREATE POLICY "Members can add members" ON household_members
-      FOR INSERT WITH CHECK (
-        auth.uid() = user_id
-        OR EXISTS (
-          SELECT 1 FROM household_members AS my
-          WHERE my.household_id = household_members.household_id
-            AND my.user_id = auth.uid()
-        )
-      );
-  END IF;
-END $$;
+-- household_members: select — uses SECURITY DEFINER helper, no self-reference
+CREATE POLICY "Members can view household members" ON household_members
+  FOR SELECT USING (is_household_member(household_id));
+
+-- household_members: insert — user can add themselves (via join) OR existing member adds
+CREATE POLICY "Members can add members" ON household_members
+  FOR INSERT WITH CHECK (
+    auth.uid() = user_id
+    OR is_household_member(household_id)
+  );
 
 -- household_invites: insert if member of household
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Members can create invites') THEN
-    CREATE POLICY "Members can create invites" ON household_invites
-      FOR INSERT WITH CHECK (
-        EXISTS (
-          SELECT 1 FROM household_members
-          WHERE household_members.household_id = household_invites.household_id
-            AND household_members.user_id = auth.uid()
-        )
-      );
-  END IF;
-END $$;
+CREATE POLICY "Members can create invites" ON household_invites
+  FOR INSERT WITH CHECK (is_household_member(household_id));
 
--- household_invites: select by token (for accepting) or if member
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Invites readable by token or member') THEN
-    CREATE POLICY "Invites readable by token or member" ON household_invites
-      FOR SELECT USING (
-        EXISTS (
-          SELECT 1 FROM household_members
-          WHERE household_members.household_id = household_invites.household_id
-            AND household_members.user_id = auth.uid()
-        )
-      );
-  END IF;
-END $$;
+-- household_invites: select if member of household
+CREATE POLICY "Invites readable by member" ON household_invites
+  FOR SELECT USING (is_household_member(household_id));
 
 -- household_invites: update (set accepted_at) — anyone authenticated
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Auth users can accept invites') THEN
-    CREATE POLICY "Auth users can accept invites" ON household_invites
-      FOR UPDATE USING (true) WITH CHECK (true);
-  END IF;
-END $$;
+CREATE POLICY "Auth users can accept invites" ON household_invites
+  FOR UPDATE USING (auth.uid() IS NOT NULL) WITH CHECK (auth.uid() IS NOT NULL);
 
--- 4. Update pantry_items RLS
+-- 5. Update pantry_items RLS (replace old user-only policy)
 -- -----------------------------------------------------------
--- Replace the existing policy to also allow household members.
--- The old policy name is "Users own pantry items".
-
-DROP POLICY IF EXISTS "Users own pantry items" ON pantry_items;
 
 CREATE POLICY "Users own or household pantry items" ON pantry_items
   FOR ALL USING (
     auth.uid() = user_id
     OR (
       household_id IS NOT NULL
-      AND EXISTS (
-        SELECT 1 FROM household_members
-        WHERE household_members.household_id = pantry_items.household_id
-          AND household_members.user_id = auth.uid()
-      )
+      AND is_household_member(household_id)
     )
   )
   WITH CHECK (
     auth.uid() = user_id
     OR (
       household_id IS NOT NULL
-      AND EXISTS (
-        SELECT 1 FROM household_members
-        WHERE household_members.household_id = pantry_items.household_id
-          AND household_members.user_id = auth.uid()
-      )
+      AND is_household_member(household_id)
     )
   );
+
+-- 6. Indexes for performance
+-- -----------------------------------------------------------
+
+CREATE INDEX IF NOT EXISTS idx_households_created_by ON households(created_by);
+CREATE INDEX IF NOT EXISTS idx_household_invites_token ON household_invites(token);
+CREATE INDEX IF NOT EXISTS idx_household_invites_household ON household_invites(household_id);
