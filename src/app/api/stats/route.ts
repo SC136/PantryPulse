@@ -11,7 +11,7 @@ export async function GET() {
   startOfMonth.setDate(1);
   startOfMonth.setHours(0, 0, 0, 0);
 
-  const [wasteData, savedData, totalItems, wasteItems] = await Promise.all([
+  const [wasteData, savedData, rescuedItems, wasteItems] = await Promise.all([
     supabase
       .from('waste_log')
       .select('*')
@@ -27,7 +27,8 @@ export async function GET() {
       .from('pantry_items')
       .select('id', { count: 'exact' })
       .eq('user_id', user.id)
-      .eq('is_used', true),
+      .eq('is_used', true)
+      .gte('updated_at', startOfMonth.toISOString()),
     supabase
       .from('waste_log')
       .select('*')
@@ -58,7 +59,7 @@ export async function GET() {
     moneySaved: saved,
     moneyWasted: wasted,
     reductionPct,
-    itemsRescued: totalItems.count || 0,
+    itemsRescued: rescuedItems.count || 0,
     wasteLog: wasteItems.data || [],
     topWastedItem: topWasted ? topWasted[0] : null,
   });

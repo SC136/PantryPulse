@@ -6,10 +6,11 @@ import { useAuth } from '@/components/layout/AuthProvider';
 import { usePantryStore } from '@/store/pantry';
 import { GroceryItem } from '@/types';
 import {
-  ShoppingCart, Plus, Check, Trash2, Package,
+  ShoppingCart, Plus, Check, Trash2, Package, Printer, Download, FileText,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { jsPDF } from 'jspdf';
 
 export default function GroceryPage() {
   const { user } = useAuth();
@@ -67,6 +68,66 @@ export default function GroceryPage() {
     } catch (e) { console.error(e); }
   };
 
+  const handlePrint = () => {
+    window.print();
+  };
+
+  const handleDownloadPDF = () => {
+    if (groceryList.length === 0) return;
+    
+    const doc = new jsPDF();
+    const date = new Date().toLocaleDateString();
+    
+    // Header
+    doc.setFontSize(22);
+    doc.setTextColor(44, 62, 80); // Dark blue-gray
+    doc.text("PantryPulse Grocery List", 20, 20);
+    
+    doc.setFontSize(12);
+    doc.setTextColor(127, 140, 141); // Gray
+    doc.text(`Generated on: ${date}`, 20, 30);
+    
+    let yPos = 45;
+    const pending = groceryList.filter(i => !i.is_purchased);
+    const purchased = groceryList.filter(i => i.is_purchased);
+    
+    if (pending.length > 0) {
+      doc.setFontSize(16);
+      doc.setTextColor(39, 174, 96); // Green
+      doc.text("TO BUY", 20, yPos);
+      yPos += 10;
+      
+      doc.setFontSize(12);
+      doc.setTextColor(44, 62, 80);
+      pending.forEach((item) => {
+        doc.rect(20, yPos - 4, 4, 4); // Checkbox
+        doc.text(`${item.name} (x${item.quantity})`, 28, yPos);
+        yPos += 8;
+        if (yPos > 280) { doc.addPage(); yPos = 20; }
+      });
+      yPos += 10;
+    }
+    
+    if (purchased.length > 0) {
+      if (yPos > 260) { doc.addPage(); yPos = 20; }
+      doc.setFontSize(16);
+      doc.setTextColor(127, 140, 141);
+      doc.text("PURCHASED", 20, yPos);
+      yPos += 10;
+      
+      doc.setFontSize(12);
+      doc.setTextColor(149, 165, 166);
+      purchased.forEach((item) => {
+        doc.line(28, yPos - 2, 28 + (item.name.length * 2.5), yPos - 2); // Strike-through
+        doc.text(`${item.name} (x${item.quantity})`, 28, yPos);
+        yPos += 8;
+        if (yPos > 280) { doc.addPage(); yPos = 20; }
+      });
+    }
+    
+    doc.save(`grocery-list-${new Date().toISOString().split('T')[0]}.pdf`);
+  };
+
   const pendingItems = groceryList.filter((i) => !i.is_purchased);
   const purchasedItems = groceryList.filter((i) => i.is_purchased);
 
@@ -75,17 +136,39 @@ export default function GroceryPage() {
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="mb-8"
+        className="mb-8 flex items-start justify-between"
       >
-        <h1
-          className="text-3xl font-bold mb-2"
-          style={{ fontFamily: 'var(--font-display)' }}
-        >
-          Grocery List
-        </h1>
-        <p className="text-[var(--ink-muted)]">
-          {pendingItems.length} items to buy • {purchasedItems.length} purchased
-        </p>
+        <div>
+          <h1
+            className="text-3xl font-bold mb-2"
+            style={{ fontFamily: 'var(--font-display)' }}
+          >
+            Grocery List
+          </h1>
+          <p className="text-[var(--ink-muted)] print:hidden">
+            {pendingItems.length} items to buy • {purchasedItems.length} purchased
+          </p>
+        </div>
+        <div className="flex gap-2 print:hidden">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDownloadPDF}
+            disabled={groceryList.length === 0}
+            className="border-[var(--pp-border)]"
+          >
+            <FileText className="w-4 h-4 mr-1" /> PDF
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handlePrint}
+            disabled={groceryList.length === 0}
+            className="border-[var(--pp-border)]"
+          >
+            <Printer className="w-4 h-4 mr-1" /> Print
+          </Button>
+        </div>
       </motion.div>
 
       {/* Add item */}
@@ -93,7 +176,7 @@ export default function GroceryPage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
-        className="glass-card p-4 mb-6"
+        className="glass-card p-4 mb-6 print:hidden"
       >
         <div className="flex gap-2">
           <Input
@@ -130,22 +213,22 @@ export default function GroceryPage() {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 20 }}
               transition={{ delay: i * 0.03 }}
-              className="glass-card-solid p-4 flex items-center gap-3"
+              className="glass-card-solid p-4 flex items-center gap-3 print:border print:border-black/10 print:bg-white print:text-black"
             >
               <button
                 onClick={() => handleToggle(item.id, item.is_purchased)}
-                className="w-6 h-6 rounded-full border-2 border-[var(--ink-faint)] hover:border-[var(--pp-accent-safe)] transition-colors shrink-0 flex items-center justify-center"
+                className="w-6 h-6 rounded-full border-2 border-[var(--ink-faint)] hover:border-[var(--pp-accent-safe)] transition-colors shrink-0 flex items-center justify-center print:border-black"
               >
               </button>
               <div className="flex-1">
                 <p className="font-medium text-sm">{item.name}</p>
               </div>
-              <span className="text-xs text-[var(--ink-faint)]">
+              <span className="text-xs text-[var(--ink-faint)] print:text-black">
                 ×{item.quantity}
               </span>
               <button
                 onClick={() => handleDelete(item.id)}
-                className="p-1 rounded hover:bg-[var(--canvas-deep)] text-[var(--ink-faint)] hover:text-[var(--pp-accent-warm)] transition-colors"
+                className="p-1 rounded hover:bg-[var(--canvas-deep)] text-[var(--ink-faint)] hover:text-[var(--pp-accent-warm)] transition-colors print:hidden"
               >
                 <Trash2 className="w-4 h-4" />
               </button>
@@ -156,7 +239,7 @@ export default function GroceryPage() {
 
       {/* Purchased section */}
       {purchasedItems.length > 0 && (
-        <div>
+        <div className="print:hidden">
           <h3 className="text-sm font-medium text-[var(--ink-faint)] uppercase tracking-wider mb-3">
             Purchased ({purchasedItems.length})
           </h3>

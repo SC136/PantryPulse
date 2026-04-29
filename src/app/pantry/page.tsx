@@ -499,19 +499,23 @@ export default function PantryPage() {
                 </Badge>
               </div>
 
-              <div className="flex items-center gap-1 mt-auto pt-3 border-t border-[var(--pp-border)]">
-                <button
+              <div className="flex items-center gap-2 mt-auto pt-3 border-t border-[var(--pp-border)]">
+                <Button
+                  size="sm"
+                  variant="outline"
                   onClick={() => handleMarkUsed(item.id)}
-                  className="flex items-center gap-1 px-2 py-1 rounded text-xs text-[var(--pp-accent-safe)] hover:bg-[var(--canvas-deep)] transition-colors"
+                  className="h-8 text-xs border-[var(--pp-accent-safe)]/30 text-[var(--pp-accent-safe)] hover:bg-[var(--pp-accent-safe)]/10 hover:text-[var(--pp-accent-safe)]"
                 >
-                  <Check className="w-3.5 h-3.5" /> Used
-                </button>
-                <button
+                  <Check className="w-3.5 h-3.5 mr-1" /> Used
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
                   onClick={() => handleDelete(item.id)}
-                  className="flex items-center gap-1 px-2 py-1 rounded text-xs text-[var(--pp-accent-warm)] hover:bg-[var(--canvas-deep)] transition-colors ml-auto"
+                  className="h-8 text-xs border-[var(--pp-accent-warm)]/30 text-[var(--pp-accent-warm)] hover:bg-[var(--pp-accent-warm)]/10 hover:text-[var(--pp-accent-warm)] ml-auto"
                 >
-                  <Trash2 className="w-3.5 h-3.5" /> Remove
-                </button>
+                  <Trash2 className="w-3.5 h-3.5 mr-1" /> Remove
+                </Button>
               </div>
             </motion.div>
           ))}
