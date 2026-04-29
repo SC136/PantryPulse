@@ -181,7 +181,14 @@ export default function PantryPage() {
         throw new Error('Scan timed out before completion');
       }
 
-      setScannedItems(detected.map((item) => ({ ...item, selected: true })));
+      setScannedItems((detected as any[]).map((item) => ({ 
+        name: item.name || 'Unknown Item',
+        quantity: item.quantity || 1,
+        unit: item.unit || 'unit',
+        estimatedDaysLeft: item.estimatedDaysLeft || 7,
+        category: item.category || 'pantry',
+        selected: true 
+      })));
     } catch (e) { console.error(e); }
     setScanLoading(false);
   };
