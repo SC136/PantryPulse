@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { motion } from 'motion/react';
 import { useAuth } from '@/components/layout/AuthProvider';
@@ -17,7 +17,7 @@ const DIETARY_OPTIONS = ['Vegan', 'Vegetarian', 'Keto', 'Gluten-Free', 'Dairy-Fr
 const CUISINE_OPTIONS = ['Indian', 'Mediterranean', 'Asian', 'Italian', 'Mexican', 'American', 'Japanese', 'Thai', 'Chinese', 'French', 'Middle Eastern'];
 const SKILL_LEVELS = ['beginner', 'intermediate', 'advanced'] as const;
 
-export default function ProfilePage() {
+function ProfileContent() {
   const { user } = useAuth();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -160,5 +160,13 @@ export default function ProfilePage() {
         </motion.div>
       </div>
     </div>
+  );
+}
+
+export default function ProfilePage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen pt-20 flex items-center justify-center"><div className="animate-pulse text-[var(--ink-faint)]">Loading...</div></div>}>
+      <ProfileContent />
+    </Suspense>
   );
 }
