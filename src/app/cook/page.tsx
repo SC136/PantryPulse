@@ -8,7 +8,7 @@ import { ChatMessage, Recipe, getExpiryStatus } from '@/types';
 import { generateId } from '@/lib/utils/formatting';
 import {
   Send, ChefHat, Clock, Users, Lightbulb, AlertTriangle,
-  Bookmark, BookmarkCheck, Sparkles, Trash2, X,
+  Bookmark, BookmarkCheck, Sparkles, Trash2, X, ShoppingCart,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -20,6 +20,26 @@ const SUGGESTED_PROMPTS = [
   '🍲 Comfort food for a cold evening',
   '🥘 Use up everything expiring this week',
 ];
+
+const BLINKIT_LINKS: Record<string, string> = {
+  'lettuce': 'https://blinkit.com/prn/iceberg-lettuce/prid/168706',
+  'iceberg': 'https://blinkit.com/prn/iceberg-lettuce/prid/168706',
+  'onion': 'https://blinkit.com/prn/onion-kanda/prid/391306',
+  'coriander': 'https://blinkit.com/prn/coriander-bunch-kothimbir/prid/3889',
+  'dhaniya': 'https://blinkit.com/prn/coriander-bunch-kothimbir/prid/3889',
+  'chilli': 'https://blinkit.com/prn/green-chilli-hiravi-mirchi/prid/423735',
+  'potato': 'https://blinkit.com/prn/potato-new-crop-batata/prid/199435',
+  'lemon': 'https://blinkit.com/prn/lemon-limbu/prid/229627',
+  'ginger': 'https://blinkit.com/prn/ginger-aale/prid/95032',
+  'cucumber': 'https://blinkit.com/prn/green-cucumber-hiravi-kakdi/prid/10088',
+  'tomato': 'https://blinkit.com/prn/organically-grown-tomato-hybrid/prid/602590',
+  'capsicum': 'https://blinkit.com/prn/green-capsicum-hiravi-shimla-mirchi/prid/3888',
+  'bell pepper': 'https://blinkit.com/prn/green-capsicum-hiravi-shimla-mirchi/prid/3888',
+  'salt': 'https://blinkit.com/prn/tata-salt-vacuum-evaporated-iodised/prid/105',
+  'sugar': 'https://blinkit.com/prn/madhur-pure-hygienic-sulphurless-sugar/prid/11006',
+  'egg': 'https://blinkit.com/prn/table-white-eggs-6-pcs/prid/487729',
+  'milk': 'https://blinkit.com/prn/amul-taaza-toned-milk/prid/19512',
+};
 
 interface SavedRecipe extends Recipe {
   id: string;
@@ -189,6 +209,12 @@ export default function CookPage() {
   const RecipeCard = ({ recipe, msgId }: { recipe: Recipe; msgId?: string }) => {
     const isSaved = msgId ? savedMsgIds.has(msgId) : false;
 
+    const getBlinkitLink = (itemName: string) => {
+      const lower = itemName.toLowerCase();
+      const match = Object.keys(BLINKIT_LINKS).find(key => lower.includes(key));
+      return match ? BLINKIT_LINKS[match] : null;
+    };
+
     return (
       <motion.div
         initial={{ opacity: 0, x: 20 }}
@@ -258,12 +284,31 @@ export default function CookPage() {
           <div className="mb-3">
             <p className="text-xs font-medium text-[var(--ink-muted)] uppercase tracking-wider mb-2">Ingredients</p>
             <ul className="space-y-1">
-              {recipe.ingredients.map((ing, i) => (
-                <li key={i} className="text-sm flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--pp-accent-safe)]" />
-                  {ing.amount} {ing.item}
-                </li>
-              ))}
+              {recipe.ingredients.map((ing, i) => {
+                const isMissing = !pantryNames.some(p => ing.item.toLowerCase().includes(p.toLowerCase()) || p.toLowerCase().includes(ing.item.toLowerCase()));
+                const blinkitLink = isMissing ? getBlinkitLink(ing.item) : null;
+                
+                return (
+                  <li key={i} className="text-sm flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className={`w-1.5 h-1.5 rounded-full ${isMissing ? 'bg-[var(--pp-accent-warm)]' : 'bg-[var(--pp-accent-safe)]'}`} />
+                      <span className={isMissing ? 'text-[var(--ink-muted)] italic' : ''}>
+                        {ing.amount} {ing.item}
+                      </span>
+                    </div>
+                    {blinkitLink && (
+                      <a 
+                        href={blinkitLink} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-[10px] flex items-center gap-1 px-1.5 py-0.5 rounded bg-[var(--pp-accent-gold)]/10 text-[var(--pp-accent-gold)] hover:bg-[var(--pp-accent-gold)]/20 transition-colors border border-[var(--pp-accent-gold)]/20"
+                      >
+                        <ShoppingCart className="w-2.5 h-2.5" /> Buy on Blinkit
+                      </a>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           </div>
         )}
