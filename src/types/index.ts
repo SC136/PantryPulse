@@ -48,6 +48,7 @@ export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  reasoning?: string;
   recipe?: Recipe;
   timestamp: Date;
 }

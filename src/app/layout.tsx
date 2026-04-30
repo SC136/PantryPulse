@@ -26,6 +26,10 @@ export const metadata: Metadata = {
   description:
     'AI-powered kitchen management. Track expiry dates, get recipe suggestions from your pantry, reduce food waste, and save money.',
   keywords: ['pantry', 'food waste', 'kitchen', 'recipes', 'meal planning', 'expiry tracker'],
+  icons: {
+    icon: '/icon.svg',
+    shortcut: '/icon.svg',
+  },
 };
 
 export default async function RootLayout({

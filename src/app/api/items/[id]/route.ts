@@ -22,6 +22,18 @@ export async function PATCH(
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // When marking an item as used, record it as rescued (saved from waste)
+  if (updates.is_used === true && data) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any).from('waste_log').insert([{
+      user_id: user.id,
+      item_name: data.name,
+      estimated_price: data.price ?? null,
+      reason: 'used',
+    }]);
+  }
+
   return NextResponse.json(data);
 }
 
@@ -35,22 +47,23 @@ export async function DELETE(
 
   const { id } = await params;
 
-  // Check if item is expired — log as waste
+  // Fetch item before deleting so we can log it
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: item } = await supabase
     .from('pantry_items')
-    .select('*')
+    .select('name,price,expiry_date,is_used')
     .eq('id', id)
     .eq('user_id', user.id)
     .single() as { data: any };
 
-  if (item && !item.is_used && item.expiry_date && new Date(item.expiry_date) < new Date()) {
+  if (item && !item.is_used) {
+    const isExpired = item.expiry_date && new Date(item.expiry_date) < new Date();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (supabase as any).from('waste_log').insert([{
       user_id: user.id,
       item_name: item.name,
-      estimated_price: item.price,
-      reason: 'expired',
+      estimated_price: item.price ?? null,
+      reason: isExpired ? 'expired' : 'discarded',
     }]);
   }
 

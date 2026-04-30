@@ -4,8 +4,11 @@ import { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '@/components/layout/AuthProvider';
 import { usePantryStore } from '@/store/pantry';
-import { ChatMessage, Recipe, getExpiryStatus } from '@/types';
+import { ChatMessage, Recipe, UserProfile, getExpiryStatus } from '@/types';
 import { generateId } from '@/lib/utils/formatting';
+import { createClient } from '@/lib/supabase/client';
+import { useToast } from '@/hooks/useToast';
+import { Toaster } from '@/components/ui/toaster';
 import {
   Send, ChefHat, Clock, Users, Lightbulb, AlertTriangle,
   Bookmark, BookmarkCheck, Sparkles, Trash2, X, ShoppingCart,
@@ -50,6 +53,7 @@ interface SavedRecipe extends Recipe {
 export default function CookPage() {
   const { user } = useAuth();
   const { items, setItems, chatHistory, addChatMessage } = usePantryStore();
+  const { toasts, addToast, removeToast } = useToast();
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -57,6 +61,7 @@ export default function CookPage() {
   const [savingRecipeId, setSavingRecipeId] = useState<string | null>(null);
   const [showSaved, setShowSaved] = useState(false);
   const [savedMsgIds, setSavedMsgIds] = useState<Set<string>>(new Set());
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
 
   // Fetch pantry items if store is empty (e.g. direct navigation / page refresh)
   useEffect(() => {
@@ -70,16 +75,22 @@ export default function CookPage() {
     }
   }, [user, items.length, setItems]);
 
-  // Fetch saved recipes
+  // Fetch saved recipes and user profile in parallel
   useEffect(() => {
-    if (user) {
-      fetch('/api/recipes')
-        .then((r) => r.json())
-        .then((data) => {
-          if (Array.isArray(data)) setSavedRecipes(data);
-        })
-        .catch(console.error);
-    }
+    if (!user) return;
+    fetch('/api/recipes')
+      .then((r) => r.json())
+      .then((data) => { if (Array.isArray(data)) setSavedRecipes(data); })
+      .catch(console.error);
+
+    const supabase = createClient();
+    supabase
+      .from('profiles')
+      .select('dietary_preferences,cuisine_preferences,cooking_skill')
+      .eq('id', user.id)
+      .single()
+      .then(({ data }) => { if (data) setUserProfile(data as unknown as UserProfile); })
+      .catch(console.error);
   }, [user]);
 
   const pantryNames = items.map((i) => i.name);
@@ -106,19 +117,24 @@ export default function CookPage() {
         const saved = await res.json();
         setSavedRecipes((prev) => [saved, ...prev]);
         setSavedMsgIds((prev) => new Set(prev).add(msgId));
+        addToast('Recipe saved!', 'success');
+      } else {
+        throw new Error('Save failed');
       }
-    } catch (e) {
-      console.error('Failed to save recipe:', e);
+    } catch {
+      addToast('Failed to save recipe. Please try again.', 'error');
     }
     setSavingRecipeId(null);
   };
 
   const handleDeleteRecipe = async (id: string) => {
     try {
-      await fetch(`/api/recipes/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/recipes/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Delete failed');
       setSavedRecipes((prev) => prev.filter((r) => r.id !== id));
-    } catch (e) {
-      console.error('Failed to delete recipe:', e);
+      addToast('Recipe removed', 'info');
+    } catch {
+      addToast('Failed to remove recipe. Please try again.', 'error');
     }
   };
 
@@ -145,6 +161,9 @@ export default function CookPage() {
           message: text,
           pantryItems: pantryNames,
           expiringItems: expiringNames,
+          dietaryPrefs: userProfile?.dietary_preferences ?? [],
+          cuisinePrefs: userProfile?.cuisine_preferences ?? [],
+          cookingSkill: userProfile?.cooking_skill ?? 'intermediate',
         }),
       });
 
@@ -169,20 +188,26 @@ export default function CookPage() {
           const chunk = decoder.decode(value);
           fullText += chunk;
 
-          // Update the last assistant message
+          // Split reasoning (text before the JSON block) from the JSON itself
+          const jsonStart = fullText.indexOf('{');
+          const reasoning = jsonStart > 0 ? fullText.slice(0, jsonStart).trim() : '';
+          const jsonPart = jsonStart >= 0 ? fullText.slice(jsonStart) : '';
+
           usePantryStore.setState((s) => ({
             chatHistory: s.chatHistory.map((msg) =>
-              msg.id === assistantMsg.id ? { ...msg, content: fullText } : msg
+              msg.id === assistantMsg.id
+                ? { ...msg, content: jsonPart, reasoning }
+                : msg
             ),
           }));
         }
       }
 
-      // Try to parse recipe from the response
+      // Try to parse the final recipe JSON
       try {
-        const jsonMatch = fullText.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          const recipe = JSON.parse(jsonMatch[0]) as Recipe;
+        const jsonStart = fullText.indexOf('{');
+        if (jsonStart >= 0) {
+          const recipe = JSON.parse(fullText.slice(jsonStart)) as Recipe;
           usePantryStore.setState((s) => ({
             chatHistory: s.chatHistory.map((msg) =>
               msg.id === assistantMsg.id ? { ...msg, recipe } : msg
@@ -190,10 +215,11 @@ export default function CookPage() {
           }));
         }
       } catch {
-        // Not a JSON recipe — that's fine, display as text
+        // Not valid JSON yet or no recipe — display as plain text
       }
     } catch (error) {
       console.error(error);
+      addToast('Failed to generate recipe. Please try again.', 'error');
       const errorMsg: ChatMessage = {
         id: generateId(),
         role: 'assistant',
@@ -442,6 +468,7 @@ export default function CookPage() {
           </h1>
           <p className="text-[var(--ink-muted)] text-sm">
             AI recipes using only your pantry items • {pantryNames.length} ingredients available
+            {userProfile?.dietary_preferences?.length ? ` • ${userProfile.dietary_preferences.join(', ')}` : ''}
           </p>
         </div>
 
@@ -588,6 +615,19 @@ export default function CookPage() {
                       ) : null}
                     </div>
                   </div>
+                  {/* Reasoning note — shown while streaming and after */}
+                  {msg.role === 'assistant' && msg.reasoning && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="mt-2 flex items-start gap-2 px-1"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-[var(--pp-accent-gold)] shrink-0 mt-0.5" />
+                      <p className="text-xs text-[var(--ink-muted)] italic leading-relaxed">
+                        {msg.reasoning}
+                      </p>
+                    </motion.div>
+                  )}
                   {msg.recipe && <RecipeCard recipe={msg.recipe} msgId={msg.id} />}
                 </div>
               ))
@@ -624,6 +664,7 @@ export default function CookPage() {
           </div>
         </div>
       </div>
+      <Toaster toasts={toasts} removeToast={removeToast} />
     </div>
   );
 }

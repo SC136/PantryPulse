@@ -14,9 +14,10 @@ export async function GET(req: NextRequest) {
   const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 100) : 50;
   const offset = Number.isFinite(rawOffset) ? Math.max(rawOffset, 0) : 0;
 
+  // Compute days_until_expiry live in JS so it never goes stale between inserts
   let query = supabase
     .from('pantry_items')
-    .select('id,name,category,quantity,unit,expiry_date,days_until_expiry,price,is_used')
+    .select('id,name,category,quantity,unit,expiry_date,price,is_used')
     .eq('user_id', user.id)
     .eq('is_used', false)
     .order('expiry_date', { ascending: true, nullsFirst: false })
@@ -35,7 +36,18 @@ export async function GET(req: NextRequest) {
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  return NextResponse.json(data);
+  // Compute days_until_expiry fresh on every request — avoids stale stored values
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const withFreshExpiry = (data ?? []).map((item) => {
+    if (!item.expiry_date) return { ...item, days_until_expiry: null };
+    const expiry = new Date(item.expiry_date);
+    expiry.setHours(0, 0, 0, 0);
+    const days = Math.round((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    return { ...item, days_until_expiry: days };
+  });
+
+  return NextResponse.json(withFreshExpiry);
 }
 
 export async function POST(req: NextRequest) {

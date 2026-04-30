@@ -6,6 +6,8 @@ import { useAuth } from '@/components/layout/AuthProvider';
 import { usePantryStore } from '@/store/pantry';
 import { PantryItem, getExpiryStatus } from '@/types';
 import { getExpiryLabel } from '@/lib/utils/expiry';
+import { useToast } from '@/hooks/useToast';
+import { Toaster } from '@/components/ui/toaster';
 import Link from 'next/link';
 import {
   AlertTriangle,
@@ -51,6 +53,7 @@ function AnimatedCounter({ value, prefix = '' }: { value: number; prefix?: strin
 export default function DashboardPage() {
   const { user } = useAuth();
   const { items, setItems } = usePantryStore();
+  const { toasts, addToast, removeToast } = useToast();
   const [stats, setStats] = useState({ moneySaved: 0, itemsRescued: 0, reductionPct: 0 });
   const [quickAdd, setQuickAdd] = useState('');
   const [isAdding, setIsAdding] = useState(false);
@@ -59,11 +62,13 @@ export default function DashboardPage() {
     if (!user) return;
     fetch('/api/items')
       .then((r) => r.json())
-      .then((data) => { if (Array.isArray(data)) setItems(data); });
+      .then((data) => { if (Array.isArray(data)) setItems(data); })
+      .catch(() => addToast('Failed to load pantry items', 'error'));
     fetch('/api/stats')
       .then((r) => r.json())
-      .then((data) => setStats(data));
-  }, [user, setItems]);
+      .then((data) => setStats(data))
+      .catch(() => {/* stats are non-critical, fail silently */});
+  }, [user, setItems, addToast]);
 
   const criticalItems = items.filter(
     (i) => getExpiryStatus(i.days_until_expiry) === 'critical'
@@ -79,7 +84,6 @@ export default function DashboardPage() {
     if (!quickAdd.trim()) return;
     setIsAdding(true);
     try {
-      // Get expiry estimate
       const estRes = await fetch('/api/expiry-estimate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -99,13 +103,15 @@ export default function DashboardPage() {
           expiry_date: expiryDate.toISOString().split('T')[0],
         }),
       });
+      if (!res.ok) throw new Error('Failed to add item');
       const data = await res.json();
       if (Array.isArray(data) && data.length > 0) {
         usePantryStore.getState().addItem(data[0]);
       }
+      addToast(`${quickAdd} added to pantry`, 'success');
       setQuickAdd('');
-    } catch (e) {
-      console.error('Quick add error:', e);
+    } catch {
+      addToast('Failed to add item. Please try again.', 'error');
     }
     setIsAdding(false);
   };
@@ -358,6 +364,7 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+      <Toaster toasts={toasts} removeToast={removeToast} />
     </div>
   );
 }

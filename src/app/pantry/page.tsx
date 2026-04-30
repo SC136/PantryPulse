@@ -6,6 +6,8 @@ import { useAuth } from '@/components/layout/AuthProvider';
 import { usePantryStore } from '@/store/pantry';
 import { PantryItem, getExpiryStatus } from '@/types';
 import { getExpiryLabel } from '@/lib/utils/expiry';
+import { useToast } from '@/hooks/useToast';
+import { Toaster } from '@/components/ui/toaster';
 import {
   Plus, Camera, Receipt, Trash2, Check, Search,
   Refrigerator, Snowflake, Package,
@@ -36,6 +38,7 @@ const FRIDGE_SCAN_MAX_POLLS = 40;
 export default function PantryPage() {
   const { user } = useAuth();
   const { items, setItems, activeCategory, setActiveCategory, removeItem, updateItem } = usePantryStore();
+  const { toasts, addToast, removeToast } = useToast();
   const [search, setSearch] = useState('');
   const [addOpen, setAddOpen] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
@@ -60,7 +63,8 @@ export default function PantryPage() {
     if (!user) return;
     fetch('/api/items')
       .then((r) => r.json())
-      .then((data) => { if (Array.isArray(data)) setItems(data); });
+      .then((data) => { if (Array.isArray(data)) setItems(data); })
+      .catch(() => addToast('Failed to load pantry items', 'error'));
   }, [user, setItems]);
 
   const filteredItems = items.filter((item) => {
@@ -85,7 +89,7 @@ export default function PantryPage() {
         const d = new Date();
         d.setDate(d.getDate() + (days || 7));
         expiryDate = d.toISOString().split('T')[0];
-      } catch { /* fallback */ }
+      } catch { /* fallback — no expiry date */ }
     }
 
     try {
@@ -101,34 +105,46 @@ export default function PantryPage() {
           price: newPrice ? parseFloat(newPrice) : null,
         }),
       });
+      if (!res.ok) throw new Error('Failed to add item');
       const data = await res.json();
       if (Array.isArray(data) && data[0]) {
         usePantryStore.getState().addItem(data[0]);
       }
       setNewName(''); setNewExpiry(''); setNewPrice('');
       setAddOpen(false);
-    } catch (e) { console.error(e); }
+      addToast(`${newName} added to pantry`, 'success');
+    } catch {
+      addToast('Failed to add item. Please try again.', 'error');
+    }
     setIsSubmitting(false);
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (id: string, name: string) => {
     try {
-      await fetch(`/api/items/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/items/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete');
       removeItem(id);
-    } catch (e) { console.error(e); }
+      addToast(`${name} removed`, 'info');
+    } catch {
+      addToast('Failed to remove item. Please try again.', 'error');
+    }
   };
 
-  const handleMarkUsed = async (id: string) => {
+  const handleMarkUsed = async (id: string, name: string) => {
     try {
       const res = await fetch(`/api/items/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ is_used: true }),
       });
+      if (!res.ok) throw new Error('Failed to mark used');
       const data = await res.json();
       if (data.id) updateItem(id, { is_used: true });
       removeItem(id);
-    } catch (e) { console.error(e); }
+      addToast(`${name} marked as used`, 'success');
+    } catch {
+      addToast('Failed to update item. Please try again.', 'error');
+    }
   };
 
   const handleFridgeScan = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -189,7 +205,10 @@ export default function PantryPage() {
         category: item.category || 'pantry',
         selected: true 
       })));
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      addToast('Fridge scan failed. Please try again.', 'error');
+    }
     setScanLoading(false);
   };
 
@@ -216,11 +235,15 @@ export default function PantryPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(itemsToAdd),
       });
+      if (!res.ok) throw new Error('Failed to add scanned items');
       const data = await res.json();
       if (Array.isArray(data)) data.forEach((item: PantryItem) => usePantryStore.getState().addItem(item));
       setScannedItems([]);
       setScanOpen(false);
-    } catch (e) { console.error(e); }
+      addToast(`${itemsToAdd.length} item${itemsToAdd.length !== 1 ? 's' : ''} added from scan`, 'success');
+    } catch {
+      addToast('Failed to add scanned items. Please try again.', 'error');
+    }
     setIsSubmitting(false);
   };
 
@@ -264,15 +287,15 @@ export default function PantryPage() {
           selected: true 
         })));
       } else {
-        console.error('No items found even after fallback');
+        addToast('No items found in receipt. Try a clearer photo.', 'info');
       }
 
       // Also upload to storage
       const formData = new FormData();
       formData.append('image', file);
       fetch('/api/scan-receipt', { method: 'POST', body: formData });
-    } catch (e) { 
-      console.error('Receipt Scan Error:', e); 
+    } catch { 
+      addToast('Receipt scan failed. Please try again.', 'error');
     } finally {
       setReceiptLoading(false);
     }
@@ -297,11 +320,15 @@ export default function PantryPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(itemsToAdd),
       });
+      if (!res.ok) throw new Error('Failed to add receipt items');
       const data = await res.json();
       if (Array.isArray(data)) data.forEach((item: PantryItem) => usePantryStore.getState().addItem(item));
       setReceiptItems([]);
       setReceiptOpen(false);
-    } catch (e) { console.error(e); }
+      addToast(`${itemsToAdd.length} item${itemsToAdd.length !== 1 ? 's' : ''} added from receipt`, 'success');
+    } catch {
+      addToast('Failed to add receipt items. Please try again.', 'error');
+    }
     setIsSubmitting(false);
   };
 
@@ -547,7 +574,7 @@ export default function PantryPage() {
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => handleMarkUsed(item.id)}
+                  onClick={() => handleMarkUsed(item.id, item.name)}
                   className="h-8 text-xs border-[var(--pp-accent-safe)]/30 text-[var(--pp-accent-safe)] hover:bg-[var(--pp-accent-safe)]/10 hover:text-[var(--pp-accent-safe)]"
                 >
                   <Check className="w-3.5 h-3.5 mr-1" /> Used
@@ -555,7 +582,7 @@ export default function PantryPage() {
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => handleDelete(item.id)}
+                  onClick={() => handleDelete(item.id, item.name)}
                   className="h-8 text-xs border-[var(--pp-accent-warm)]/30 text-[var(--pp-accent-warm)] hover:bg-[var(--pp-accent-warm)]/10 hover:text-[var(--pp-accent-warm)] ml-auto"
                 >
                   <Trash2 className="w-3.5 h-3.5 mr-1" /> Remove
@@ -574,6 +601,8 @@ export default function PantryPage() {
           </p>
         </div>
       )}
+
+      <Toaster toasts={toasts} removeToast={removeToast} />
     </div>
   );
 }

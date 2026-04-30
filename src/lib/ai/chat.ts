@@ -41,7 +41,8 @@ export async function generateRecipe(
           content: `You are PantryPulse's recipe engine. Strict rules:
 1. ONLY use ingredients from the provided pantry list. Basics (salt, pepper, oil, water, sugar, flour) are always allowed.
 2. PRIORITIZE expiring ingredients — build the recipe around them first.
-3. Respond in this exact JSON format:
+3. Start your response with 1-3 sentences of reasoning — explain what you're making and why (e.g. which expiring items you're using, how you're respecting dietary restrictions, any substitutions). Keep it conversational and helpful.
+4. Then output the recipe in this exact JSON format on a new line:
 {
   "title": "Recipe Title",
   "description": "One evocative sentence",
@@ -52,9 +53,9 @@ export async function generateRecipe(
   "steps": ["Step 1.", "Step 2."],
   "tip": "One practical kitchen tip"
 }
-4. Substitution awareness: if a common substitution is useful, mention it inline naturally.
-5. Ingredient synonyms: treat "capsicum"="bell pepper", "coriander"="cilantro", "aubergine"="eggplant".
-6. Cooking skill level: ${cookingSkill}. Adjust complexity accordingly.${dietLine}${cuisineLine}`
+5. Substitution awareness: if a common substitution is useful, mention it inline naturally.
+6. Ingredient synonyms: treat "capsicum"="bell pepper", "coriander"="cilantro", "aubergine"="eggplant".
+7. Cooking skill level: ${cookingSkill}. Adjust complexity accordingly.${dietLine}${cuisineLine}`
         },
         {
           role: 'user',
