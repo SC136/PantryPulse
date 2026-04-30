@@ -228,19 +228,54 @@ export default function PantryPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     setReceiptLoading(true);
+    setReceiptItems([]); // Clear previous results
 
     try {
       // Client-side OCR with Tesseract
-      const { parseReceiptText } = await import('@/lib/ocr/receipt-parser');
-      const parsed = await parseReceiptText(file);
-      setReceiptItems(parsed.map((item) => ({ ...item, selected: true })));
+      const Tesseract = await import('tesseract.js');
+      const { data: { text: rawText } } = await Tesseract.recognize(file, 'eng');
+      
+      console.log('OCR Raw Text:', rawText);
+
+      // Use AI to filter the raw text
+      const filterRes = await fetch('/api/filter-receipt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rawText }),
+      });
+      
+      let itemsToSet = [];
+
+      if (filterRes.ok) {
+        const data = await filterRes.json();
+        console.log('AI Filtered Data:', data);
+        itemsToSet = data.items || [];
+      } else {
+        console.warn('AI Filter failed, falling back to basic parser');
+        const { parseReceiptText } = await import('@/lib/ocr/receipt-parser');
+        itemsToSet = await parseReceiptText(file);
+      }
+
+      if (itemsToSet.length > 0) {
+        setReceiptItems(itemsToSet.map((item: any) => ({ 
+          name: item.name || 'Unknown Item',
+          quantity: item.quantity || 1,
+          price: typeof item.price === 'number' ? item.price : null,
+          selected: true 
+        })));
+      } else {
+        console.error('No items found even after fallback');
+      }
 
       // Also upload to storage
       const formData = new FormData();
       formData.append('image', file);
       fetch('/api/scan-receipt', { method: 'POST', body: formData });
-    } catch (e) { console.error(e); }
-    setReceiptLoading(false);
+    } catch (e) { 
+      console.error('Receipt Scan Error:', e); 
+    } finally {
+      setReceiptLoading(false);
+    }
   };
 
   const handleConfirmReceipt = async () => {
@@ -357,7 +392,7 @@ export default function PantryPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div><Label>Expiry Date <span className="text-[var(--ink-faint)]">(auto if blank)</span></Label><Input type="date" value={newExpiry} onChange={(e) => setNewExpiry(e.target.value)} className="bg-[var(--canvas-deep)]" /></div>
-                  <div><Label>Price ($)</Label><Input type="number" step="0.01" value={newPrice} onChange={(e) => setNewPrice(e.target.value)} className="bg-[var(--canvas-deep)]" /></div>
+                  <div><Label>Price (₹)</Label><Input type="number" step="1" value={newPrice} onChange={(e) => setNewPrice(e.target.value)} className="bg-[var(--canvas-deep)]" /></div>
                 </div>
                 <Button onClick={handleAddItem} disabled={isSubmitting || !newName.trim()} className="w-full bg-[var(--pp-accent-navy)]">
                   {isSubmitting ? 'Adding...' : 'Add to Pantry'}
@@ -433,19 +468,21 @@ export default function PantryPage() {
               ) : (
                 <div className="space-y-3">
                   <p className="text-sm text-[var(--ink-muted)]">Parsed {receiptItems.length} items:</p>
-                  {receiptItems.map((item, i) => (
-                    <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-[var(--canvas-deep)]">
-                      <input type="checkbox" checked={item.selected} onChange={() => {
-                        const updated = [...receiptItems];
-                        updated[i].selected = !updated[i].selected;
-                        setReceiptItems(updated);
-                      }} className="rounded" />
-                      <div className="flex-1">
-                        <p className="text-sm font-medium">{item.name}</p>
-                        {item.price && <p className="text-xs text-[var(--ink-faint)]">${item.price.toFixed(2)}</p>}
+                  <div className="max-h-[50vh] overflow-y-auto space-y-2 pr-1">
+                    {receiptItems.map((item, i) => (
+                      <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-[var(--canvas-deep)]">
+                        <input type="checkbox" checked={item.selected} onChange={() => {
+                          const updated = [...receiptItems];
+                          updated[i].selected = !updated[i].selected;
+                          setReceiptItems(updated);
+                        }} className="rounded" />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium">{item.name}</p>
+                          {item.price && <p className="text-xs text-[var(--ink-faint)]">₹{item.price.toFixed(0)}</p>}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                   <Button onClick={handleConfirmReceipt} disabled={isSubmitting} className="w-full bg-[var(--pp-accent-navy)]">
                     Add {receiptItems.filter((i) => i.selected).length} Items
                   </Button>

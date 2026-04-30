@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { useAuth } from '@/components/layout/AuthProvider';
 import { formatCurrency, formatDate } from '@/lib/utils/formatting';
-import { TrendingDown, Percent, Leaf, AlertTriangle, DollarSign, Trash2 } from 'lucide-react';
+import { TrendingDown, Percent, Leaf, AlertTriangle, IndianRupee, Trash2 } from 'lucide-react';
 
 interface Stats {
   moneySaved: number;
@@ -27,8 +27,8 @@ export default function StatsPage() {
   if (!stats) return <div className="min-h-screen pt-20 flex items-center justify-center"><div className="animate-pulse text-[var(--ink-faint)]">Loading...</div></div>;
 
   const cards = [
-    { label: 'Money Saved', value: `$${stats.moneySaved.toFixed(2)}`, icon: DollarSign, color: 'var(--pp-accent-safe)' },
-    { label: 'Money Wasted', value: `$${stats.moneyWasted.toFixed(2)}`, icon: TrendingDown, color: 'var(--pp-accent-warm)' },
+    { label: 'Money Saved', value: `₹${stats.moneySaved.toFixed(0)}`, icon: IndianRupee, color: 'var(--pp-accent-safe)' },
+    { label: 'Money Wasted', value: `₹${stats.moneyWasted.toFixed(0)}`, icon: TrendingDown, color: 'var(--pp-accent-warm)' },
     { label: 'Items Rescued', value: String(stats.itemsRescued), icon: Leaf, color: 'var(--pp-accent-navy)' },
     { label: 'Waste Reduced', value: `${stats.reductionPct}%`, icon: Percent, color: 'var(--pp-accent-gold)' },
   ];

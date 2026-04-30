@@ -131,3 +131,42 @@ export async function estimateExpiry(itemName: string): Promise<number> {
     clear();
   }
 }
+
+export async function extractReceiptItems(rawText: string): Promise<Array<{ name: string; quantity: number; price: number | null }>> {
+  try {
+    const completion = await client.chat.completions.create({
+      model: 'meta/llama-4-maverick-17b-128e-instruct',
+      messages: [
+        {
+          role: 'system',
+          content: `You are an expert at parsing messy grocery receipts from OCR text.
+Your task is to identify and extract ONLY individual food, beverage, and household consumable items.
+
+Rules:
+1. EXTRACT: Name of the product, estimated quantity, and price (in Rupees ₹).
+2. IGNORE: Store names, addresses, dates, receipt numbers, payment details, sub-totals, taxes, savings, delivery fees, "grand total", or store policy text.
+3. NOISY TEXT: OCR text is often broken. Try your best to reconstruct item names (e.g., "M1LK 1L" -> "Milk 1L").
+4. FORMAT: You must return a JSON object with an "items" key containing an array of items.
+Example: {"items": [{"name": "Milk", "quantity": 1, "price": 60}, {"name": "Eggs", "quantity": 1, "price": 80}]}
+
+Strictly respond with ONLY the JSON object. No preamble or markdown blocks.`
+        },
+        { role: 'user', content: `OCR Text to parse (prices in Rupees):\n\n${rawText}` }
+      ],
+      temperature: 0.1,
+      // Some models might not support response_format: { type: 'json_object' } if it's not OpenAI native
+    });
+
+    const content = completion.choices?.[0]?.message?.content || '{"items": []}';
+    
+    // Clean potential markdown blocks
+    const jsonString = content.replace(/```json/g, '').replace(/```/g, '').trim();
+    
+    const data = JSON.parse(jsonString);
+    const items = data.items || [];
+    return Array.isArray(items) ? items : [];
+  } catch (error) {
+    console.error('Extract receipt items error:', error);
+    return [];
+  }
+}
