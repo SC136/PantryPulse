@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { analyzeFridgeImage } from '@/lib/ai/gemma-vision';
+import { analyzeFridgeImage } from '@/lib/ai/vision';
 import { after, NextRequest, NextResponse } from 'next/server';
 
 export async function POST(req: NextRequest) {

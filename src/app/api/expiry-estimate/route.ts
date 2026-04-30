@@ -1,4 +1,4 @@
-import { estimateExpiry } from '@/lib/ai/deepseek';
+import { estimateExpiry } from '@/lib/ai/chat';
 import { getDefaultExpiryDays } from '@/lib/utils/expiry';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';

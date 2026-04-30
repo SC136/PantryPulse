@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { generateRecipe } from '@/lib/ai/deepseek';
+import { generateRecipe } from '@/lib/ai/chat';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(req: NextRequest) {
