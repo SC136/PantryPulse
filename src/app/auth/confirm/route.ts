@@ -9,9 +9,18 @@ export async function GET(request: NextRequest) {
 
   if (token_hash && type) {
     const supabase = await createClient();
-    const { error } = await supabase.auth.verifyOtp({ type, token_hash });
-    if (!error) {
-      return NextResponse.redirect(new URL('/', request.url));
+    const { data: { user }, error } = await supabase.auth.verifyOtp({ type, token_hash });
+    if (!error && user) {
+      // Check if profile is complete
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('dietary_preferences, cuisine_preferences')
+        .eq('id', user.id)
+        .single();
+
+      const isOnboarded = profile && (profile.dietary_preferences?.length > 0 || profile.cuisine_preferences?.length > 0);
+      
+      return NextResponse.redirect(new URL(isOnboarded ? '/' : '/profile?onboarding=true', request.url));
     }
   }
 

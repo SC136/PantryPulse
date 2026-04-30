@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { motion } from 'motion/react';
 import { useAuth } from '@/components/layout/AuthProvider';
 import { UserProfile } from '@/types';
 import { createClient } from '@/lib/supabase/client';
-import { Save, Check } from 'lucide-react';
+import { Save, Check, Sparkles } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -18,6 +19,9 @@ const SKILL_LEVELS = ['beginner', 'intermediate', 'advanced'] as const;
 
 export default function ProfilePage() {
   const { user } = useAuth();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const isOnboarding = searchParams.get('onboarding') === 'true';
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -52,7 +56,14 @@ export default function ProfilePage() {
     });
     setIsSaving(false);
     setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    
+    if (isOnboarding) {
+      setTimeout(() => {
+        router.push('/');
+      }, 1000);
+    } else {
+      setTimeout(() => setSaved(false), 2000);
+    }
   };
 
   if (!profile) return <div className="min-h-screen pt-20 flex items-center justify-center"><div className="animate-pulse text-[var(--ink-faint)]">Loading...</div></div>;
@@ -60,8 +71,19 @@ export default function ProfilePage() {
   return (
     <div className="min-h-screen pt-20 pb-12 px-4 max-w-2xl mx-auto">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
-        <h1 className="text-3xl font-bold mb-2" style={{ fontFamily: 'var(--font-display)' }}>Your Profile</h1>
-        <p className="text-[var(--ink-muted)]">Personalize your cooking experience</p>
+        {isOnboarding ? (
+          <>
+            <h1 className="text-3xl font-bold mb-2 flex items-center gap-2" style={{ fontFamily: 'var(--font-display)' }}>
+              Welcome to PantryPulse! <Sparkles className="w-6 h-6 text-[var(--pp-accent-gold)] animate-pulse" />
+            </h1>
+            <p className="text-[var(--ink-muted)] text-lg">Let&apos;s set up your kitchen preferences to get started.</p>
+          </>
+        ) : (
+          <>
+            <h1 className="text-3xl font-bold mb-2" style={{ fontFamily: 'var(--font-display)' }}>Your Profile</h1>
+            <p className="text-[var(--ink-muted)]">Personalize your cooking experience</p>
+          </>
+        )}
       </motion.div>
 
       <div className="space-y-6">
@@ -125,7 +147,15 @@ export default function ProfilePage() {
 
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}>
           <Button onClick={handleSave} disabled={isSaving} className="w-full bg-[var(--pp-accent-navy)] hover:bg-[var(--pp-accent-navy)]/90 py-6 text-base" style={{ fontFamily: 'var(--font-display)' }}>
-            {saved ? <><Check className="w-4 h-4 mr-2" /> Saved!</> : isSaving ? 'Saving...' : <><Save className="w-4 h-4 mr-2" /> Save Preferences</>}
+            {isSaving ? (
+              'Saving...'
+            ) : saved ? (
+              <><Check className="w-4 h-4 mr-2" /> Saved!</>
+            ) : isOnboarding ? (
+              'Complete Setup & Get Started'
+            ) : (
+              <><Save className="w-4 h-4 mr-2" /> Save Preferences</>
+            )}
           </Button>
         </motion.div>
       </div>

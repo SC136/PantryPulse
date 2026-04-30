@@ -24,11 +24,21 @@ export default function LoginPage() {
     setIsLoading(true);
     setError('');
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (!error) {
-      router.push('/');
-      router.refresh();
-    } else {
+    const { data: { user }, error } = await supabase.auth.signInWithPassword({ email, password });
+    
+    if (!error && user) {
+      // Check if profile is complete
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('dietary_preferences, cuisine_preferences')
+        .eq('id', user.id)
+        .single();
+
+      const isOnboarded = profile && (profile.dietary_preferences?.length > 0 || profile.cuisine_preferences?.length > 0);
+       
+       router.push(isOnboarded ? '/' : '/profile?onboarding=true');
+       router.refresh();
+    } else if (error) {
       setError(error.message);
     }
     setIsLoading(false);
