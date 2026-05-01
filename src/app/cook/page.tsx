@@ -89,8 +89,13 @@ export default function CookPage() {
       .select('dietary_preferences,cuisine_preferences,cooking_skill')
       .eq('id', user.id)
       .single()
-      .then(({ data }) => { if (data) setUserProfile(data as unknown as UserProfile); })
-      .catch(console.error);
+      .then(({ data, error }) => {
+        if (error) {
+          console.error(error);
+          return;
+        }
+        if (data) setUserProfile(data as unknown as UserProfile);
+      });
   }, [user]);
 
   const pantryNames = items.map((i) => i.name);
