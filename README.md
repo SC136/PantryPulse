@@ -2,6 +2,12 @@
 
 AI-powered kitchen management. Track expiry dates, get recipe suggestions from your pantry, reduce food waste, and save money.
 
+## Demo Video
+
+<iframe src="https://drive.google.com/file/d/190ycbebRjjvjSZabUe_6Jvf5jZCkmhUr/preview" width="640" height="360" allow="autoplay"></iframe>
+
+[Watch the demo video](https://drive.google.com/file/d/190ycbebRjjvjSZabUe_6Jvf5jZCkmhUr/view?usp=sharing)
+
 ## Features
 
 - **🔴 Eat Me First Dashboard** — See what's expiring today, this week, and what's still fresh
