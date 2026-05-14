@@ -17,16 +17,23 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const router = useRouter();
 
   // Check if user is already logged in and redirect
   useEffect(() => {
     const checkAuth = async () => {
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        // Already logged in, redirect to pantry
-        router.push('/pantry');
+      try {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          // Already logged in, redirect to pantry
+          router.push('/pantry');
+        }
+      } catch (err) {
+        console.error('Auth check failed:', err);
+      } finally {
+        setIsCheckingAuth(false);
       }
     };
     checkAuth();
@@ -97,16 +104,25 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen relative flex items-center justify-center p-4">
-      {/* Background image */}
-      <div
-        className="absolute inset-0 bg-cover bg-center"
-        style={{
-          backgroundImage:
-            'url(https://images.unsplash.com/photo-1498837167922-ddd27525d352?w=1600&q=80)',
-        }}
-      />
-      <div className="absolute inset-0 hero-vignette" />
+    <>
+      {isCheckingAuth ? (
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <div className="inline-block w-8 h-8 border-4 border-[var(--pp-accent-gold)] border-t-transparent rounded-full animate-spin"></div>
+            <p className="mt-4 text-[var(--text-secondary)]">Checking authentication...</p>
+          </div>
+        </div>
+      ) : (
+        <div className="min-h-screen relative flex items-center justify-center p-4">
+          {/* Background image */}
+          <div
+            className="absolute inset-0 bg-cover bg-center"
+            style={{
+              backgroundImage:
+                'url(https://images.unsplash.com/photo-1498837167922-ddd27525d352?w=1600&q=80)',
+            }}
+          />
+          <div className="absolute inset-0 hero-vignette" />
 
       {/* Auth card */}
       <motion.div
@@ -284,6 +300,8 @@ export default function LoginPage() {
           </Button>
         </div>
       </motion.div>
-    </div>
+        </div>
+      )}
+    </>
   );
 }

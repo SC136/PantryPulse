@@ -12,7 +12,9 @@ function getCachedValue(key: string): number | undefined {
 }
 
 function setCachedValue(key: string, value: number): void {
-  // If cache is at max size, clear the oldest entry
+  // FIFO eviction: when cache is full, remove the oldest entry (first inserted)
+  // This provides basic memory leak protection without LRU overhead.
+  // Frequently-accessed items are NOT reordered on hit (no delete+re-set).
   if (expiryCache.size >= MAX_CACHE_SIZE && !expiryCache.has(key)) {
     const firstKey = expiryCache.keys().next().value;
     if (firstKey) expiryCache.delete(firstKey);

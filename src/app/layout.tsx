@@ -5,15 +5,6 @@ import { AuthProvider } from '@/components/layout/AuthProvider';
 import { Navbar } from '@/components/layout/Navbar';
 import { ErrorBoundary } from '@/components/layout/ErrorBoundary';
 import { createClient } from '@/lib/supabase/server';
-import { validateEnv } from '@/lib/env';
-
-// Validate environment variables on app startup
-try {
-  validateEnv();
-} catch (error) {
-  console.error('Environment validation failed:', error);
-  throw error;
-}
 
 const cormorant = Cormorant_Garamond({
   subsets: ['latin'],

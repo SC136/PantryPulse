@@ -30,8 +30,10 @@ export async function GET(req: NextRequest) {
   if (expiring === 'true') {
     const threshold = new Date();
     threshold.setDate(threshold.getDate() + 4);
-    // Build date string using server's local timezone (UTC on most production hosts)
-    // This assumes expiry_date in database is stored as YYYY-MM-DD in a consistent timezone
+    // Build date string using server's local timezone (typically UTC in production).
+    // Note: This uses the server's timezone, not the client's, so all users see
+    // the same expiry cutoff. If per-user timezone handling is needed, the client
+    // should compute the threshold locally and pass it as a query param instead.
     const thresholdDateStr = threshold.getFullYear() + '-' +
       String(threshold.getMonth() + 1).padStart(2, '0') + '-' +
       String(threshold.getDate()).padStart(2, '0');
