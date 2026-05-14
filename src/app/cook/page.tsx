@@ -50,12 +50,6 @@ interface SavedRecipe extends Recipe {
   instructions?: string;
 }
 
-// Helper function to get Blinkit link for missing ingredients
-function getBlinkitLink(ingredient: string): string | null {
-  const normalized = ingredient.toLowerCase().trim();
-  return BLINKIT_LINKS[normalized] || null;
-}
-
 export default function CookPage() {
   const { user } = useAuth();
   const { items, setItems, chatHistory, addChatMessage } = usePantryStore();

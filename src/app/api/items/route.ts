@@ -30,8 +30,8 @@ export async function GET(req: NextRequest) {
   if (expiring === 'true') {
     const threshold = new Date();
     threshold.setDate(threshold.getDate() + 4);
-    // Use the date in the user's local timezone for comparison
-    // by comparing the full ISO date string (YYYY-MM-DD)
+    // Build date string using server's local timezone (UTC on most production hosts)
+    // This assumes expiry_date in database is stored as YYYY-MM-DD in a consistent timezone
     const thresholdDateStr = threshold.getFullYear() + '-' +
       String(threshold.getMonth() + 1).padStart(2, '0') + '-' +
       String(threshold.getDate()).padStart(2, '0');

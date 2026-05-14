@@ -3,7 +3,17 @@ import { Cormorant_Garamond, Source_Serif_4 } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from '@/components/layout/AuthProvider';
 import { Navbar } from '@/components/layout/Navbar';
+import { ErrorBoundary } from '@/components/layout/ErrorBoundary';
 import { createClient } from '@/lib/supabase/server';
+import { validateEnv } from '@/lib/env';
+
+// Validate environment variables on app startup
+try {
+  validateEnv();
+} catch (error) {
+  console.error('Environment validation failed:', error);
+  throw error;
+}
 
 const cormorant = Cormorant_Garamond({
   subsets: ['latin'],
@@ -68,10 +78,12 @@ export default async function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col antialiased">
-        <AuthProvider initialUser={initialUser}>
-          <Navbar />
-          <main className="flex-1">{children}</main>
-        </AuthProvider>
+        <ErrorBoundary>
+          <AuthProvider initialUser={initialUser}>
+            <Navbar />
+            <main className="flex-1">{children}</main>
+          </AuthProvider>
+        </ErrorBoundary>
       </body>
     </html>
   );

@@ -9,10 +9,6 @@ const REQUIRED_ENV_VARS = [
   'NVIDIA_API_KEY',
 ];
 
-const OPTIONAL_ENV_VARS = [
-  'SUPABASE_SERVICE_ROLE_KEY', // Required for storage setup, but optional for initial run
-];
-
 /**
  * Validates all required environment variables are set
  * Should be called once on app startup
