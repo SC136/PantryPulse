@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'motion/react';
 import { createClient } from '@/lib/supabase/client';
@@ -19,6 +19,19 @@ export default function LoginPage() {
   const [message, setMessage] = useState('');
   const router = useRouter();
 
+  // Check if user is already logged in and redirect
+  useEffect(() => {
+    const checkAuth = async () => {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        // Already logged in, redirect to pantry
+        router.push('/pantry');
+      }
+    };
+    checkAuth();
+  }, [router]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -36,7 +49,7 @@ export default function LoginPage() {
 
       const isOnboarded = profile && (profile.dietary_preferences?.length > 0 || profile.cuisine_preferences?.length > 0);
        
-       router.push(isOnboarded ? '/' : '/profile?onboarding=true');
+       router.push(isOnboarded ? '/pantry' : '/profile?onboarding=true');
        router.refresh();
     } else if (error) {
       setError(error.message);

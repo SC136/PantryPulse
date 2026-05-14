@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
 
       const isOnboarded = profile && (profile.dietary_preferences?.length > 0 || profile.cuisine_preferences?.length > 0);
       
-      return NextResponse.redirect(new URL(isOnboarded ? '/' : '/profile?onboarding=true', request.url));
+      return NextResponse.redirect(new URL(isOnboarded ? '/pantry' : '/profile?onboarding=true', request.url));
     }
   }
 

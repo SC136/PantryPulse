@@ -74,7 +74,22 @@ export default function PantryPage() {
   });
 
   const handleAddItem = async () => {
-    if (!newName.trim()) return;
+    if (!newName.trim()) {
+      addToast('Please enter an item name', 'error');
+      return;
+    }
+
+    const quantity = parseFloat(newQuantity);
+    if (isNaN(quantity) || quantity <= 0) {
+      addToast('Please enter a valid quantity', 'error');
+      return;
+    }
+
+    if (newPrice && isNaN(parseFloat(newPrice))) {
+      addToast('Please enter a valid price', 'error');
+      return;
+    }
+
     setIsSubmitting(true);
 
     let expiryDate = newExpiry;
@@ -97,9 +112,9 @@ export default function PantryPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: newName,
+          name: newName.trim(),
           category: newCategory,
-          quantity: parseFloat(newQuantity) || 1,
+          quantity,
           unit: newUnit,
           expiry_date: expiryDate || null,
           price: newPrice ? parseFloat(newPrice) : null,
@@ -150,6 +165,21 @@ export default function PantryPage() {
   const handleFridgeScan = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // File validation
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+    const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
+    if (file.size > MAX_FILE_SIZE) {
+      addToast('File too large. Maximum size is 10MB', 'error');
+      return;
+    }
+
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      addToast('Invalid file type. Please use JPG, PNG, or WebP', 'error');
+      return;
+    }
+
     setScanLoading(true);
 
     const formData = new FormData();
@@ -250,6 +280,21 @@ export default function PantryPage() {
   const handleReceiptScan = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // File validation
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+    const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
+    if (file.size > MAX_FILE_SIZE) {
+      addToast('File too large. Maximum size is 10MB', 'error');
+      return;
+    }
+
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      addToast('Invalid file type. Please use JPG, PNG, or WebP', 'error');
+      return;
+    }
+
     setReceiptLoading(true);
     setReceiptItems([]); // Clear previous results
 
