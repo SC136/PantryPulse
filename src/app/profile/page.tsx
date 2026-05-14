@@ -59,7 +59,7 @@ function ProfileContent() {
     
     if (isOnboarding) {
       setTimeout(() => {
-        router.push('/');
+        router.push('/pantry');
       }, 1000);
     } else {
       setTimeout(() => setSaved(false), 2000);

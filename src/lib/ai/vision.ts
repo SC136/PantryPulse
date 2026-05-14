@@ -58,7 +58,12 @@ Be thorough — identify everything visible. If you cannot determine days left, 
     const content = response.data.choices?.[0]?.message?.content || '';
     const jsonMatch = content.match(/\[[\s\S]*\]/);
     if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]) as DetectedItem[];
+      try {
+        return JSON.parse(jsonMatch[0]) as DetectedItem[];
+      } catch (parseError) {
+        console.error('Failed to parse vision response JSON:', parseError, 'Content:', jsonMatch[0]);
+        return [];
+      }
     }
     return [];
   } catch (error) {

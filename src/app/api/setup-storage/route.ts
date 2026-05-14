@@ -1,7 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { createClient as createServerClient } from '@/lib/supabase/server';
 
 export async function GET() {
+  // CRITICAL: Verify user is authenticated
+  const supabase = await createServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
   // Storage bucket creation requires service_role (admin) key to bypass RLS.
   // Falls back to anon key if service_role isn't set — will fail with RLS error.
   const supabaseAdmin = createClient(

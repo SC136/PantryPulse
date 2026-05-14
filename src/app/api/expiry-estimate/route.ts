@@ -3,8 +3,24 @@ import { getDefaultExpiryDays } from '@/lib/utils/expiry';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
-// Simple in-memory cache for common items
+// Simple in-memory cache with size limit to prevent memory leaks
 const expiryCache = new Map<string, number>();
+const MAX_CACHE_SIZE = 500;
+
+function getCachedValue(key: string): number | undefined {
+  return expiryCache.get(key);
+}
+
+function setCachedValue(key: string, value: number): void {
+  // FIFO eviction: when cache is full, remove the oldest entry (first inserted)
+  // This provides basic memory leak protection without LRU overhead.
+  // Frequently-accessed items are NOT reordered on hit (no delete+re-set).
+  if (expiryCache.size >= MAX_CACHE_SIZE && !expiryCache.has(key)) {
+    const firstKey = expiryCache.keys().next().value;
+    if (firstKey) expiryCache.delete(firstKey);
+  }
+  expiryCache.set(key, value);
+}
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
@@ -18,20 +34,21 @@ export async function POST(req: NextRequest) {
     const key = itemName.toLowerCase().trim();
 
     // Check cache first
-    if (expiryCache.has(key)) {
-      return NextResponse.json({ days: expiryCache.get(key), source: 'cache' });
+    const cachedDays = getCachedValue(key);
+    if (cachedDays !== undefined) {
+      return NextResponse.json({ days: cachedDays, source: 'cache' });
     }
 
     // Check local defaults
     const defaultDays = getDefaultExpiryDays(key);
     if (defaultDays !== null) {
-      expiryCache.set(key, defaultDays);
+      setCachedValue(key, defaultDays);
       return NextResponse.json({ days: defaultDays, source: 'default' });
     }
 
     // Ask AI
     const days = await estimateExpiry(itemName);
-    expiryCache.set(key, days);
+    setCachedValue(key, days);
     return NextResponse.json({ days, source: 'ai' });
   } catch (error) {
     console.error('Expiry estimate error:', error);
