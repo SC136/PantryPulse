@@ -29,10 +29,11 @@ export default function LoginPage() {
         if (user) {
           // Already logged in, redirect to pantry
           router.push('/pantry');
+          return;
         }
+        setIsCheckingAuth(false);
       } catch (err) {
         console.error('Auth check failed:', err);
-      } finally {
         setIsCheckingAuth(false);
       }
     };

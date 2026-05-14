@@ -9,6 +9,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const category = searchParams.get('category');
   const expiring = searchParams.get('expiring');
+  const clientThresholdDate = searchParams.get('thresholdDate');
   const rawLimit = Number.parseInt(searchParams.get('limit') ?? '', 10);
   const rawOffset = Number.parseInt(searchParams.get('offset') ?? '', 10);
   const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 100) : 50;
@@ -28,15 +29,22 @@ export async function GET(req: NextRequest) {
   }
 
   if (expiring === 'true') {
-    const threshold = new Date();
-    threshold.setDate(threshold.getDate() + 4);
-    // Build date string using server's local timezone (typically UTC in production).
-    // Note: This uses the server's timezone, not the client's, so all users see
-    // the same expiry cutoff. If per-user timezone handling is needed, the client
-    // should compute the threshold locally and pass it as a query param instead.
-    const thresholdDateStr = threshold.getFullYear() + '-' +
-      String(threshold.getMonth() + 1).padStart(2, '0') + '-' +
-      String(threshold.getDate()).padStart(2, '0');
+    const validClientDate =
+      typeof clientThresholdDate === 'string' &&
+      /^\d{4}-\d{2}-\d{2}$/.test(clientThresholdDate)
+        ? clientThresholdDate
+        : null;
+
+    // Prefer client-provided YYYY-MM-DD threshold (computed in user's local timezone).
+    // Fallback to server-local threshold date when client value is not provided.
+    const thresholdDateStr = validClientDate ?? (() => {
+      const threshold = new Date();
+      threshold.setDate(threshold.getDate() + 4);
+      return threshold.getFullYear() + '-' +
+        String(threshold.getMonth() + 1).padStart(2, '0') + '-' +
+        String(threshold.getDate()).padStart(2, '0');
+    })();
+
     query = query.lte('expiry_date', thresholdDateStr);
   }
 
